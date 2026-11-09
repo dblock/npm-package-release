@@ -1,0 +1,26 @@
+name: Lint
+
+on:
+  push:
+    branches: [master]
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint Code and Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Out Source
+        uses: actions/checkout@v7.0.1
+      - name: Set Up Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+      - name: Install Development Dependencies
+        run: npm ci
+      - name: Run Lint
+        run: npm run lint

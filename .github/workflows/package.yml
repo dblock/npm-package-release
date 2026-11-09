@@ -1,0 +1,45 @@
+name: Package
+
+on:
+  push:
+    branches: [master]
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package with npm ${{ matrix.entry.npm }} on Node ${{ matrix.entry.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        entry:
+          - { node: '22.14.0', npm: '11' }
+          - { node: '26', npm: '12' }
+    steps:
+      - name: Check Out Source
+        uses: actions/checkout@v7.0.1
+      - name: Set Up Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: ${{ matrix.entry.node }}
+          package-manager-cache: false
+      - name: Select npm Version
+        run: npm install --global npm@${{ matrix.entry.npm }}
+      - name: Validate Packed Consumer
+        run: npm run test:package
+      - name: Validate Empty Archive Override
+        env:
+          PACKAGE_ARCHIVE: ''
+        run: npm run test:package
+      - name: Build Retained Archive
+        id: archive
+        run: |
+          npm pack --json --pack-destination "$RUNNER_TEMP" > "$RUNNER_TEMP/pack.json"
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; const output = JSON.parse(readFileSync(process.env.RUNNER_TEMP + "/pack.json", "utf8")); const [pack] = Array.isArray(output) ? output : Object.values(output); console.log("filename=" + pack.filename);' >> "$GITHUB_OUTPUT"
+      - name: Validate Retained Archive
+        env:
+          PACKAGE_ARCHIVE: ${{ runner.temp }}/${{ steps.archive.outputs.filename }}
+        run: npm run test:package

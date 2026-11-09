@@ -1,0 +1,49 @@
+name: Test
+
+on:
+  push:
+    branches: [master]
+  pull_request: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test Node ${{ matrix.entry.node }} on ${{ matrix.entry.os }}
+    runs-on: ${{ matrix.entry.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        entry:
+          - { node: '22.14.0', os: ubuntu-latest, coverage: false }
+          - { node: '24', os: ubuntu-latest, coverage: false }
+          - { node: '26', os: ubuntu-latest, coverage: true }
+          - { node: '26', os: windows-latest, coverage: false }
+          - { node: '26', os: macos-latest, coverage: false }
+    steps:
+      - name: Check Out Source
+        uses: actions/checkout@v7.0.1
+      - name: Set Up Tooling Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '26'
+          cache: npm
+      - name: Install Development Dependencies
+        run: npm ci
+      - name: Set Up Test Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: ${{ matrix.entry.node }}
+          package-manager-cache: false
+      - name: Run Tests
+        if: ${{ !matrix.entry.coverage }}
+        run: npm test
+      - name: Run Tests with Coverage
+        if: ${{ matrix.entry.coverage }}
+        run: npm run test:coverage
+      - name: Upload Coverage to Coveralls
+        if: ${{ matrix.entry.coverage }}
+        uses: coverallsapp/github-action@v2.3.8
+        with:
+          file: coverage/lcov.info
