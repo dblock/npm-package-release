@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
-import { command } from "../../src/command.js";
+import { command } from "../../dist/command.js";
 import { releaseFixture } from "./release-fixture.js";
 
 export async function checkActions(t, archive) {

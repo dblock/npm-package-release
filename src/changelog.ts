@@ -2,45 +2,47 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 import { numericVersion } from "./command.js";
+import type { Nodes } from "mdast";
+import type { ChangelogConfig } from "./contracts.js";
 
-function document(source) {
+function document(source: string) {
   return fromMarkdown(source, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
 }
 
-function headings(source) {
+function headings(source: string) {
   return document(source).children.filter((node) => node.type === "heading").map((node) => ({
     node,
-    text: source.slice(node.position.start.offset, node.position.end.offset)
+    text: source.slice(node.position!.start.offset!, node.position!.end.offset!)
       .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "").replace(/[ \t]+#+[ \t]*$/u, ""),
   }));
 }
 
-function section(source, pattern) {
+function section(source: string, pattern: RegExp) {
   const all = headings(source);
   const matches = all.filter(({ text }) => pattern.test(text));
   if (matches.length !== 1) throw new Error("Expected exactly one matching changelog heading.");
   const { node, text } = matches[0];
   const end = all.find(({ node: other }) =>
-    other.position.start.offset > node.position.start.offset && other.depth <= node.depth,
-  )?.node.position.start.offset ?? source.length;
-  return { node, text, start: node.position.start.offset, body: node.position.end.offset, end };
+    other.position!.start.offset! > node.position!.start.offset! && other.depth <= node.depth,
+  )?.node.position!.start.offset ?? source.length;
+  return { node, text, start: node.position!.start.offset!, body: node.position!.end.offset!, end };
 }
 
-function hasNotes(node) {
+function hasNotes(node: Nodes): boolean {
   if (["heading", "html", "definition", "thematicBreak"].includes(node.type)) return false;
-  if (["text", "code", "inlineCode"].includes(node.type)) return Boolean(node.value.trim());
+  if ("value" in node) return Boolean(node.value.trim());
   if (node.type === "image") return Boolean(node.alt);
-  return node.children?.some(hasNotes) ?? false;
+  return "children" in node ? node.children.some(hasNotes) : false;
 }
 
-function replace(source, edits) {
+function replace(source: string, edits: [number, number, string][]) {
   for (const [start, end, value] of edits.sort((a, b) => b[0] - a[0])) {
     source = source.slice(0, start) + value + source.slice(end);
   }
   return source;
 }
 
-function compareReference(source, version) {
+function compareReference(source: string, version: string) {
   const definitions = document(source).children.filter((node) => node.type === "definition");
   const references = definitions.filter((node) => node.identifier.toLowerCase() === "unreleased");
   if (references.length > 1) throw new Error("Duplicate Unreleased comparison references.");
@@ -51,12 +53,12 @@ function compareReference(source, version) {
   if (!match) throw new Error("Unreleased reference must be a VERSION...BRANCH comparison URL.");
   const [, prefix, tag, previous, branch] = match;
   const newline = source.includes("\r\n") ? "\r\n" : "\n";
-  return replace(source, [[reference.position.start.offset, reference.position.end.offset,
+  return replace(source, [[reference.position!.start.offset!, reference.position!.end.offset!,
     `[Unreleased]: ${prefix}${tag}${version}...${branch}${newline}[${version}]: ${prefix}${tag}${previous}...${tag}${version}`,
   ]]);
 }
 
-export function releaseChangelog(source, { format, version, date }) {
+export function releaseChangelog(source: string, { format, version, date }: ChangelogConfig & { version: string; date: string }) {
   numericVersion(version);
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Expected a YYYY-MM-DD release date.");
   if (!["intridea", "keep-a-changelog"].includes(format)) throw new Error("Unknown changelog format.");
@@ -69,11 +71,11 @@ export function releaseChangelog(source, { format, version, date }) {
   if (intridea) {
     const items = document(notes).children.filter((node) => node.type === "list").flatMap((node) => node.children);
     const placeholders = items.filter((node) =>
-      notes.slice(node.position.start.offset, node.position.end.offset).trim() === "- Your contribution here.",
+      notes.slice(node.position!.start.offset!, node.position!.end.offset!).trim() === "- Your contribution here.",
     );
     if (placeholders.length !== 1) throw new Error("Expected exactly one contribution placeholder.");
     const placeholder = placeholders[0];
-    notes = replace(notes, [[placeholder.position.start.offset, placeholder.position.end.offset, ""]]);
+    notes = replace(notes, [[placeholder.position!.start.offset!, placeholder.position!.end.offset!, ""]]);
   }
   if (!document(notes).children.some(hasNotes)) throw new Error("Release notes must not be empty.");
   const heading = `${"#".repeat(current.node.depth)} ${intridea
@@ -84,7 +86,7 @@ export function releaseChangelog(source, { format, version, date }) {
   return { source: updated, notes: notes.trim() };
 }
 
-export function nextChangelog(source, { format, version, releasedVersion }) {
+export function nextChangelog(source: string, { format, version, releasedVersion }: ChangelogConfig & { version: string; releasedVersion: string }) {
   numericVersion(version);
   numericVersion(releasedVersion);
   const intridea = format === "intridea";

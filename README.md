@@ -2,9 +2,9 @@
 
 [![Test](https://github.com/dblock/npm-package-release/actions/workflows/test.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/test.yml) [![Lint](https://github.com/dblock/npm-package-release/actions/workflows/lint.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/lint.yml) [![Package](https://github.com/dblock/npm-package-release/actions/workflows/package.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/package.yml) [![Coverage Status](https://coveralls.io/repos/github/dblock/npm-package-release/badge.svg?branch=master)](https://coveralls.io/github/dblock/npm-package-release?branch=master)
 
-Reusable GitHub Actions workflows and JavaScript tooling for npm package releases, ported from [ruby-gem-release](https://github.com/dblock/ruby-gem-release).
+Composable, strongly typed release workflows for npm, with a JavaScript API, CLI, and GitHub Actions interfaces, ported from [ruby-gem-release](https://github.com/dblock/ruby-gem-release).
 
-Build and validate one archive, publish it with npm Trusted Publishing, create its GitHub Release, and prepare the next development iteration. Keep your changelog format and trusted preparation hooks. This package has not had its first npm publication yet.
+Use the default workflow to validate and publish one archive, create its GitHub Release, and prepare the next development iteration, or compose your own workflow from class-based steps and replaceable service interfaces. This package has not had its first npm publication yet.
 
 ## Installation
 
@@ -15,6 +15,7 @@ Requires Node.js 22.14+, 24, or 26 and newer supported releases. Until publicati
 The CLI is named `npr`; the npm package remains `npm-package-release`. From this checkout:
 
 ```sh
+npm run build
 node bin/npr.js --help
 ```
 
@@ -29,19 +30,21 @@ For consumers, configure the [release workflow](docs/usage.md#github-actions) an
 
 ## Configuration
 
-Choose the changelog format explicitly in `npr.config.js`:
+Export a workflow from `npr.config.js`:
 
 ```js
-export default {
+import { ReleaseWorkflow } from "npm-package-release";
+
+export default new ReleaseWorkflow({
   changelog: { format: "intridea" },
-};
+});
 ```
 
-The default validation runs `npm test` and `npm run lint` before publication and for the next development iteration. [Detailed Usage](docs/usage.md#configuration) documents hooks, defaults, and Keep a Changelog support.
+The default validation runs `npm test` and `npm run lint` before publication and for the next development iteration. [Composable Workflows](docs/workflows.md) explains custom classes, typed step composition, and service injection; [Detailed Usage](docs/usage.md#configuration) documents compatible configuration objects, hooks, and defaults.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), and [Detailed Usage](docs/usage.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), and [Composable Workflows](docs/workflows.md).
 
 ## License
 

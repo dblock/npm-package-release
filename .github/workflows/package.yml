@@ -24,6 +24,13 @@ jobs:
       - name: Set Up Node
         uses: actions/setup-node@v7.1.0
         with:
+          node-version: '26'
+          cache: npm
+      - name: Install Development Dependencies
+        run: npm ci
+      - name: Set Up Consumer Node
+        uses: actions/setup-node@v7.1.0
+        with:
           node-version: ${{ matrix.entry.node }}
           package-manager-cache: false
       - name: Select npm Version

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, writeFile, rm, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { release, verify } from "../src/index.js";
+import { release, verify } from "../dist/index.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
 
 test("release uses actual Git pushes, npm tests/lint, and exact archive consumers", async (t) => {

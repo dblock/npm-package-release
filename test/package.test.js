@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { NpmPackage, record } from "../src/package.js";
-import { command } from "../src/command.js";
+import { NpmPackage, record } from "../dist/package.js";
+import { command } from "../dist/command.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
 
 test("npm metadata accepts actual npm 11/12 shapes and rejects ambiguous or malformed records", () => {

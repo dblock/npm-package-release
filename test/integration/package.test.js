@@ -10,7 +10,8 @@ import { fileURLToPath, pathToFileURL, URL } from "node:url";
 import { checkCli } from "../helpers/cli.js";
 import { releaseFixture } from "../helpers/release-fixture.js";
 import { checkActions } from "../helpers/actions.js";
-import { command } from "../../src/command.js";
+import { command } from "../../dist/command.js";
+import { checkComposition } from "../helpers/composition.js";
 
 test("the actual tarball installs with strict engines and exposes its API and CLI", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "npm-package-release-consumer-"));
@@ -48,7 +49,8 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   const originalDigest = await digest();
   const files = listing.stdout.trim().split(/\r?\n/u);
   for (const file of [
-    "package/src/index.js",
+    "package/dist/index.js",
+    "package/dist/index.d.ts",
     "package/bin/npr.js",
     "package/README.md",
     "package/LICENSE",
@@ -71,10 +73,33 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   assert.equal(imported.status, 0, imported.stderr);
   assert.match(imported.stdout, /^\d+\.\d+\.\d+$/u);
   checkCli((args) => npm(["exec", "--silent", "--offline", "--", "npr", ...args], consumer));
-  const installedApi = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/src/index.js")).href);
+  const installedApi = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/dist/index.js")).href);
+  await checkComposition(t, installedApi);
+  const typed = join(consumer, "consumer.ts");
+  await writeFile(typed, `
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact } from "npm-package-release";
+import type { Step, ReleaseOptions, PreparedRelease } from "npm-package-release";
+class Inspect implements Step<PreparedRelease, PreparedRelease> {
+  readonly id = "inspect";
+  async run(input: PreparedRelease) { return input; }
+}
+const flow = Workflow.start<ReleaseOptions>()
+  .then(new InitializeRelease({ changelog: null }))
+  .then(new PrepareRelease()).then(new Inspect());
+export async function run(options: ReleaseOptions) { return flow.run(options); }
+// @ts-expect-error Prepared releases cannot skip artifact validation.
+flow.then(new PublishArtifact());
+`);
+  await writeFile(join(consumer, "tsconfig.json"), JSON.stringify({
+    compilerOptions: {
+      strict: true, noEmit: true, module: "NodeNext", target: "ES2023", types: [],
+    },
+    files: ["consumer.ts"],
+  }));
+  await command(process.execPath, [join(root, "node_modules/typescript/bin/tsc"), "--project", consumer]);
   const fixture = await releaseFixture(t);
   await fixture.assertReleased(await installedApi.release(fixture.config, fixture));
-  const { NpmPackage } = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/src/package.js")).href);
+  const { NpmPackage } = installedApi;
   const publicRegistry = new NpmPackage(consumer, (program, args, options) =>
     command(program, args, { cwd: consumer, ...options }));
   assert.equal((await publicRegistry.view("semver", "7.8.6")).version, "7.8.6");

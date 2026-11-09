@@ -4,10 +4,12 @@ import preferences from "eslint-plugin-markdown-preferences";
 import paragraph from "eslint-plugin-markdown-preferences-paragraph";
 import proseSpellcheck from "eslint-plugin-prose-spellcheck";
 import yml from "eslint-plugin-yml";
+import ts from "typescript-eslint";
 
 export default [
-  { ignores: ["coverage/**", ".release/**"] },
+  { ignores: ["coverage/**", "dist/**", ".release/**"] },
   { ...js.configs.recommended, files: ["**/*.js"] },
+  ...ts.configs.recommended,
   ...yml.configs["flat/recommended"],
   {
     files: ["**/*.md"],
