@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
-import { command } from "../../src/command.js";
+import { command } from "../../dist/command.js";
 
 export async function releaseFixture(t, settings = {}) {
   const directory = await mkdtemp(join(tmpdir(), "npr-release-test-"));

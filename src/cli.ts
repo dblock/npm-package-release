@@ -31,7 +31,7 @@ export async function main(args = process.argv.slice(2)) {
     allowPositionals: true,
   });
   if (positionals.length) throw new Error("Unexpected positional arguments.");
-  if (action === "verify") return await verify({ artifacts: values.artifacts });
-  const { default: config } = await import(pathToFileURL(resolve(values.config)).href);
-  return await release(config, { version: values.version, artifacts: values.artifacts });
+  if (action === "verify") return await verify({ artifacts: values.artifacts as string | undefined });
+  const { default: config } = await import(pathToFileURL(resolve(values.config as string)).href);
+  return await release(config, { version: values.version as string | undefined, artifacts: values.artifacts as string | undefined });
 }

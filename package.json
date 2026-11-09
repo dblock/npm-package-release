@@ -1,17 +1,20 @@
 {
   "name": "npm-package-release",
   "version": "0.1.0",
-  "description": "Reusable GitHub Actions workflows and JavaScript tooling for npm package releases.",
+  "description": "Composable, strongly typed npm release workflows with class-based steps and GitHub Actions interfaces.",
   "type": "module",
   "exports": {
-    ".": "./src/index.js",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {
     "npr": "./bin/npr.js"
   },
   "files": [
-    "src/",
+    "dist/",
     "bin/",
     "AGENTS.md",
     "CHANGELOG.md",
@@ -25,9 +28,13 @@
     "node": "^22.14.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
+    "build": "tsc",
+    "prepack": "npm run build",
+    "pretest": "npm run build",
     "test": "node --test test/*.test.js",
-    "test:coverage": "c8 --all --include=\"src/**/*.js\" --include=\"bin/**/*.js\" --include=\"scripts/**/*.js\" --reporter=text --reporter=lcov npm test",
-    "lint": "eslint . && eslint --config eslint.config-code-blocks.js \"**/*.md\" && node scripts/check-workflow-names.js",
+    "test:coverage": "c8 --all --include=\"dist/**/*.js\" --include=\"bin/**/*.js\" --include=\"scripts/**/*.js\" --exclude=\"dist/contracts.js\" --reporter=text --reporter=lcov npm test",
+    "lint": "tsc --noEmit && tsc --project tsconfig.test.json && eslint . && eslint --config eslint.config-code-blocks.js \"**/*.md\" && node scripts/check-workflow-names.js",
+    "pretest:package": "npm run build",
     "test:package": "node --test test/integration/*.test.js"
   },
   "dependencies": {
@@ -37,6 +44,8 @@
     "semver": "7.8.6"
   },
   "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/semver": "7.8.0",
     "@cspell/dict-en_us": "4.4.43",
     "@cspell/dict-software-terms": "5.4.9",
     "@eslint/js": "10.0.1",
@@ -48,7 +57,9 @@
     "eslint-plugin-prose-spellcheck": "0.1.2",
     "eslint-plugin-yml": "3.10.0",
     "title-case": "4.3.2",
-    "yaml": "2.9.1"
+    "yaml": "2.9.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1"
   },
   "repository": {
     "type": "git",

@@ -1,5 +1,12 @@
-export class Git {
-  constructor(run, { branch, remote = "origin" } = {}) {
+import type { Command, ReleaseRepository } from "./contracts.js";
+
+export class Git implements ReleaseRepository {
+  readonly run: (...args: string[]) => Promise<string>;
+  branch: string;
+  readonly remote: string;
+  initialCommit = "";
+
+  constructor(run: Command, { branch = "", remote = "origin" }: { branch?: string; remote?: string } = {}) {
     this.run = (...args) => run("git", args);
     this.branch = branch;
     this.remote = remote;
@@ -23,36 +30,36 @@ export class Git {
     }
   }
 
-  async current(expected) {
+  async current(expected: string) {
     await this.run("fetch", "--no-tags", this.remote, `refs/heads/${this.branch}`);
     if ((await this.run("rev-parse", "FETCH_HEAD")).trim() !== expected) {
       throw new Error("Remote branch advanced; inspect the release state before retrying.");
     }
   }
 
-  async missingTag(version) {
+  async missingTag(version: string) {
     try {
       await this.run("show-ref", "--verify", "--quiet", `refs/tags/v${version}`);
     } catch (error) {
-      if (error.code !== 1) throw error;
+      if ((error as { code?: unknown }).code !== 1) throw error;
       try {
         await this.run("ls-remote", "--exit-code", this.remote, `refs/tags/v${version}`);
       } catch (remoteError) {
-        if (remoteError.code === 2) return;
+        if ((remoteError as { code?: unknown }).code === 2) return;
         throw remoteError;
       }
     }
     throw new Error(`Release tag already exists: v${version}`);
   }
 
-  async stage(edits) {
+  async stage(edits: () => Promise<void>) {
     await this.clean();
     await edits();
     await this.run("add", "--all", "--", ".");
     return (await this.run("write-tree")).trim();
   }
 
-  async unchanged(tree) {
+  async unchanged(tree: string) {
     if ((await this.run("write-tree")).trim() !== tree ||
       (await this.run("diff", "--name-only")).trim() ||
       (await this.run("ls-files", "--others", "--exclude-standard")).trim()) {
@@ -60,25 +67,37 @@ export class Git {
     }
   }
 
-  async commit(message, tree) {
+  async commit(message: string, tree: string) {
     await this.unchanged(tree);
     if ((await this.run("diff", "--cached", "--name-only")).trim()) await this.run("commit", "-m", message);
     await this.clean();
     return (await this.run("rev-parse", "HEAD")).trim();
   }
 
-  async push(commit, version) {
+  async tag(version: string) {
+    await this.run("tag", "--no-sign", `v${version}`);
+  }
+
+  async bundle(path: string, version: string) {
+    await this.run("bundle", "create", path, "HEAD", `refs/tags/v${version}`);
+  }
+
+  async verifyTag(version: string, commit: string) {
+    await this.verify(null, version, commit);
+  }
+
+  async push(commit: string, version?: string) {
     await this.run("push", ...(version ? ["--atomic"] : []), this.remote,
       `${commit}:refs/heads/${this.branch}`, ...(version ? [`refs/tags/v${version}`] : []));
     await this.verify(commit, version);
   }
 
-  async verify(commit, version) {
+  async verify(commit: string | null, version?: string, tagCommit = commit) {
     const refs = (await this.run("ls-remote", this.remote,
       ...(commit ? [`refs/heads/${this.branch}`] : []),
       ...(version ? [`refs/tags/v${version}`] : []))).trim().split(/\r?\n/u);
     for (const ref of [commit && `refs/heads/${this.branch}`, version && `refs/tags/v${version}`].filter(Boolean)) {
-      if (!refs.includes(`${commit || this.releaseCommit}\t${ref}`)) throw new Error(`Remote ref mismatch: ${ref}`);
+      if (!refs.includes(`${commit || tagCommit}\t${ref}`)) throw new Error(`Remote ref mismatch: ${ref}`);
     }
   }
 }

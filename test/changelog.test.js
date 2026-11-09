@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { releaseChangelog, nextChangelog } from "../src/changelog.js";
+import { releaseChangelog, nextChangelog } from "../dist/changelog.js";
 
 const intridea = "# Changelog\n\n## 0.1.0 (Next)\n\n- Fix Unicode offsets: caf\u00e9.\n- Your contribution here.\n";
 const keep = "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- Ship a package.\n\n## [0.0.1] - 2025-01-01\n\n- Earlier.\n\n[Unreleased]: https://github.com/a/b/compare/v0.0.1...master\n[0.0.1]: https://github.com/a/b/releases/tag/v0.0.1\n";

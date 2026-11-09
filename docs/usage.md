@@ -2,7 +2,7 @@
 
 ## Requirements
 
-Use one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Alternate registries, prerelease versions/channels, and workspace publication are not supported.
+The default workflow uses one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Built-in services do not support alternate registries, prerelease versions/channels, or workspace publication; [custom workflows](workflows.md) can supply their own classes and contracts.
 
 The package has not been published yet. Until its first release, build/install its local tarball using [CONTRIBUTING](../CONTRIBUTING.md#setup-and-validation). After publication, install `npm-package-release` as a development dependency, not the unrelated npm package `npr`. Prefer an exact reviewed version and commit the lockfile.
 
@@ -40,7 +40,7 @@ Representative release output:
 
 ## Configuration
 
-Configuration is trusted JavaScript executed with release privileges, not untrusted data. All hooks are optional; hook failures stop the sequence. Choose a changelog format explicitly or use `changelog: null` to delegate release-note maintenance entirely to your hooks.
+Configuration is trusted JavaScript executed with release privileges, not untrusted data. Export a [composed workflow](workflows.md), `new ReleaseWorkflow(config, services)`, or a compatible configuration object as shown below. The object form is adapted to the default class-based workflow. All hooks are optional; hook failures stop the sequence. Choose a changelog format explicitly or use `changelog: null` to delegate release-note maintenance to your own steps or changelog service.
 
 ```js
 export default {
@@ -88,7 +88,7 @@ await release(config, { version: "1.2.3" });
 await verify();
 ```
 
-Both operations return the retained state. Options include `cwd`, `artifacts`, `log`, scoped `env`, and an argument-based asynchronous `run` executor (default: public system commands). Alternate executors support isolated integrations; they are trusted code. `releaseChangelog(source, { format, version, date })` returns `{ source, notes }`; `nextChangelog(source, { format, version, releasedVersion })` returns the next source text. These pure functions do not write files.
+The default release and verification return retained state snapshots. A custom workflow returns its final step's output. Options include `cwd`, `artifacts`, `log`, scoped `env`, and an argument-based asynchronous `run` executor (default: public system commands). Alternate executors support isolated integrations; they are trusted code. `releaseChangelog(source, { format, version, date })` returns `{ source, notes }`; `nextChangelog(source, { format, version, releasedVersion })` returns the next source text. These pure functions do not write files. Public TypeScript declarations include step, context, service, and workflow contracts without requiring TypeScript at runtime.
 
 ## GitHub Actions
 

@@ -6,7 +6,7 @@ The consumer release CLI/API, reusable workflow, and composite action are implem
 
 Start at `0.1.0` and keep that version until actually published. Check registry status before changing versions; an authentication/network failure is not proof of availability. Keep `package.json`, `package-lock.json`, and CHANGELOG synchronized using the policy in [AGENTS.md](AGENTS.md).
 
-Run `npm ci`, `npm run test:coverage`, and `npm run lint`. Build an archive with `npm pack --json`, inspect the file list and package metadata, then run `PACKAGE_ARCHIVE=/absolute/path/package.tgz npm run test:package` to install and exercise that exact artifact with strict engines. Retain the archive and checksum through publication and verification; do not rebuild between validation and publication.
+Run `npm ci`, `npm run test:coverage`, and `npm run lint`. Build an archive with `npm pack --json` (which compiles TypeScript), inspect compiled JavaScript, declarations, the file list, and package metadata, then run `PACKAGE_ARCHIVE=/absolute/path/package.tgz npm run test:package` to install and exercise that exact artifact with strict engines. Retain the archive and checksum through publication and verification; do not rebuild the archive between validation and publication. Packed consumers do not require a TypeScript compiler at runtime.
 
 ## First Publication
 

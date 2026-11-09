@@ -2,13 +2,21 @@
 
 ## Purpose and Scope
 
-Port [ruby-gem-release](https://github.com/dblock/ruby-gem-release) to npm without making consumers maintain custom release scripts. Support one public root npm package, numeric release versions, Intridea or Keep a Changelog notes, npm publication, Git, and optional GitHub Releases. Defer workspaces, alternate registries/hosts, prerelease channels, and artwork.
+Port [ruby-gem-release](https://github.com/dblock/ruby-gem-release) to npm with class-based, strongly typed workflow composition. Provide a safe default for one public root npm package, numeric release versions, Intridea or Keep a Changelog notes, npm publication, Git, and optional GitHub Releases. Consumers can compose their own steps and service classes. Native workspace, alternate-registry/host, prerelease, and artwork implementations remain deferred.
 
-Keep `npm-package-release` as the repository/npm package name, `npr` as the executable, and `npr.config.js` as the trusted configuration module. Implementation lives in `src/`, the executable in `bin/`, unit/release tests in `test/`, installed-package tests in `test/integration/`, and maintenance tools in `scripts/`. Use ESM and public Node.js, npm, Git, and GitHub APIs; use SemVer for incrementing and mdast for source-preserving changelog boundaries.
+Keep `npm-package-release` as the repository/npm package name, `npr` as the executable, and `npr.config.js` as the trusted configuration module. TypeScript implementation lives in `src/`; compile ESM JavaScript, declarations, and source maps to ignored `dist/`. The executable lives in `bin/`, unit/release tests in `test/`, compile-time contracts in `test/types/`, installed-package tests in `test/integration/`, and maintenance tools in `scripts/`. Use public Node.js, npm, Git, and GitHub APIs; use SemVer for incrementing and mdast for source-preserving changelog boundaries.
+
+## Composition Boundaries
+
+`Step<Input, Output>` is the public behavioral contract. `Workflow.start<Input>().then(step)` creates an immutable sequential composition, enforcing adjacent input/output compatibility. Steps are class instances with stable identifiers, not string-named hooks or an untyped context registry. Built-in release records carry frozen state snapshots and discriminate completed lifecycle stages; validation, commitment, and artifact preparation are explicit prerequisites for publication.
+
+`ReleaseWorkflow` assembles exported built-in steps. Each depends on `ReleaseRepository`, `PackageProject`, `PackagePublisher`, `Changelog`, `VersionPolicy`, `ReleaseHost`, `ReleaseValidator`, `ReleaseStore`, and `RegistryVerifier` interfaces rather than concrete providers. `InitializeRelease` supplies defaults or explicitly injected instances. Custom workflows may omit or replace compatible steps; custom implementations own any safety guarantees they bypass. Keep the runner independent of npm/Git side effects, do not add a generic parallel scheduler, and do not claim types verify arbitrary custom behavior.
+
+The generic runner handles ordered execution, observer events, and stopping without retries. `ReleaseObserver` provides logging and failure persistence for release contexts. Built-in steps persist phase transitions and recovery snapshots through the injected store. Existing `release(config, options)` and configuration objects are adapters to the default workflow; the CLI also accepts composed workflows. See [Composable Workflows](docs/workflows.md) for contracts and examples.
 
 ## Release Sequence
 
-The reusable workflow and composite action invoke the same CLI as local callers. The workflow owns the release environment, manual-default-branch guard, permissions, runner, dependency setup, concurrency, Git identity, and artifact upload. Composite callers supply those prerequisites. The reusable workflow does not reference a moving composite-action version.
+The reusable GitHub Actions workflow and composite action invoke the same CLI/configuration as local callers, including composed class workflows. The Actions workflow owns the release environment, manual-default-branch guard, permissions, runner, dependency setup, concurrency, Git identity, and artifact upload. Composite callers supply those prerequisites. The reusable workflow does not reference a moving composite-action version.
 
 Check the repository root, configured default branch, clean checkout, remote tip, selected numeric version, existing tags, registry availability, and configuration before preparation. Version updates synchronize the manifest and optional lockfile; formatting retains indentation and line endings. Preparation hooks own trusted additional edits. Stage only changes produced inside that clean preparation boundary and retain the exact index tree. Reject any later unstaged, untracked, or index changes from validation rather than staging them.
 
