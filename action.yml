@@ -1,0 +1,34 @@
+name: npm Package Release
+description: Release one npm package with exact-artifact publication and recovery metadata.
+inputs:
+  config:
+    description: Trusted ESM configuration module in the caller repository.
+    default: npr.config.js
+  version:
+    description: Optional numeric release version overriding package.json.
+    default: ''
+  timezone:
+    description: Named timezone for release dates and Git timestamps.
+    default: UTC
+runs:
+  using: composite
+  steps:
+    - name: Release Package
+      shell: bash
+      env:
+        NPR_CONFIG: ${{ inputs.config }}
+        NPR_VERSION: ${{ inputs.version }}
+        NPR_TIMEZONE: ${{ inputs.timezone }}
+        NPR_ARTIFACTS: ${{ runner.temp }}/npr-release
+        NPR_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        GH_TOKEN: ${{ github.token }}
+      run: npm exec --offline -- npr release --config "$NPR_CONFIG" --version "$NPR_VERSION" --artifacts "$NPR_ARTIFACTS"
+    - name: Preserve Release Artifacts
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v7.0.2
+      with:
+        name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/npr-release
+        include-hidden-files: true
+        if-no-files-found: warn
+        retention-days: 30

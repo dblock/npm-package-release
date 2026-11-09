@@ -6,8 +6,11 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import process from "node:process";
 import test from "node:test";
-import { fileURLToPath, URL } from "node:url";
+import { fileURLToPath, pathToFileURL, URL } from "node:url";
 import { checkCli } from "../helpers/cli.js";
+import { releaseFixture } from "../helpers/release-fixture.js";
+import { checkActions } from "../helpers/actions.js";
+import { command } from "../../src/command.js";
 
 test("the actual tarball installs with strict engines and exposes its API and CLI", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "npm-package-release-consumer-"));
@@ -68,5 +71,13 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   assert.equal(imported.status, 0, imported.stderr);
   assert.match(imported.stdout, /^\d+\.\d+\.\d+$/u);
   checkCli((args) => npm(["exec", "--silent", "--offline", "--", "npr", ...args], consumer));
+  const installedApi = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/src/index.js")).href);
+  const fixture = await releaseFixture(t);
+  await fixture.assertReleased(await installedApi.release(fixture.config, fixture));
+  const { NpmPackage } = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/src/package.js")).href);
+  const publicRegistry = new NpmPackage(consumer, (program, args, options) =>
+    command(program, args, { cwd: consumer, ...options }));
+  assert.equal((await publicRegistry.view("semver", "7.8.6")).version, "7.8.6");
+  if (process.platform !== "win32") await checkActions(t, archive);
   assert.equal(await digest(), originalDigest);
 });

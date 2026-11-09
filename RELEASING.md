@@ -1,6 +1,6 @@
 # Releasing
 
-**Provisional:** Release commands, release Actions interfaces, and this package's publication workflow are not implemented. These instructions describe the approved publication plan; they do not authorize credentials, tags, releases, publisher setup, or publication.
+The consumer release CLI/API, reusable workflow, and composite action are implemented; see [Detailed Usage](docs/usage.md). This package itself has not had its first npm publication or trusted-publisher setup. Instructions for publishing this package remain provisional and do not authorize credentials, tags, releases, publisher setup, or publication. The reusable `release.yml` uses `workflow_call`, not a self-publication dispatch.
 
 ## Version and Validation
 
