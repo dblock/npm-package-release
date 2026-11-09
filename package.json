@@ -1,0 +1,64 @@
+{
+  "name": "npm-package-release",
+  "version": "0.1.0",
+  "description": "Reusable GitHub Actions workflows and JavaScript tooling for npm package releases.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "npm-package-release": "./bin/npm-package-release.js"
+  },
+  "files": [
+    "src/",
+    "bin/",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "DESIGN.md",
+    "RELEASING.md"
+  ],
+  "engines": {
+    "node": "^22.14.0 || ^24.0.0 || >=26.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "test:coverage": "c8 --all --include=\"src/**/*.js\" --include=\"bin/**/*.js\" --include=\"scripts/**/*.js\" --reporter=text --reporter=lcov npm test",
+    "lint": "eslint . && eslint --config eslint.config-code-blocks.js \"**/*.md\" && node scripts/check-workflow-names.js",
+    "test:package": "node --test test/integration/*.test.js"
+  },
+  "devDependencies": {
+    "@cspell/dict-en_us": "4.4.43",
+    "@cspell/dict-software-terms": "5.4.9",
+    "@eslint/js": "10.0.1",
+    "@eslint/markdown": "8.0.3",
+    "c8": "12.0.0",
+    "eslint": "10.14.0",
+    "eslint-plugin-markdown-preferences": "0.43.0",
+    "eslint-plugin-markdown-preferences-paragraph": "0.2.0",
+    "eslint-plugin-prose-spellcheck": "0.1.2",
+    "eslint-plugin-yml": "3.10.0",
+    "title-case": "4.3.2",
+    "yaml": "2.9.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dblock/npm-package-release.git"
+  },
+  "homepage": "https://github.com/dblock/npm-package-release#readme",
+  "bugs": {
+    "url": "https://github.com/dblock/npm-package-release/issues"
+  },
+  "keywords": [
+    "npm",
+    "release",
+    "github-actions",
+    "trusted-publishing"
+  ],
+  "license": "MIT",
+  "author": "Daniel Doubrovkine",
+  "publishConfig": {
+    "access": "public"
+  }
+}

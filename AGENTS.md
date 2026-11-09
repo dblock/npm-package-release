@@ -1,0 +1,29 @@
+# Working on npm-package-release
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [DESIGN.md](DESIGN.md) before making changes. This package ports reusable npm release operations from `ruby-gem-release`; it is not a general release service. Release behavior is not implemented in the scaffold. Defer workspaces, alternate registries/hosts, and prerelease channels.
+
+## Implementation and Validation
+
+Put ESM implementation in `src/`, the executable in `bin/`, unit tests in `test/`, and actual packed-consumer tests in `test/integration/`. Support Node.js 22.14+, 24, and 26+; use Node.js 26 and npm 12 for development. Keep consumer engine checks strict and separate from development-tool requirements. Use public Node.js, npm, Git, and GitHub interfaces. Verify and prefer current stable tool/dependency releases while retaining supported-runtime compatibility.
+
+Run `npm test` and `npm run lint` locally before every push, including PR updates. Run `npm run test:coverage` to inspect line/branch coverage; aim near full coverage during initial implementation, especially real error paths, without trivial assertions or hiding implementation code. Run `npm run test:package` before committing packaging/public-entry changes; inspect and install the real archive, not just source files. Reuse final pre-commit results for a push only when the tested content/configuration is unchanged. See CONTRIBUTING for provided, unset, and empty archive-override checks.
+
+Do not implement release publication in scaffold code. During implementation, preserve clean-checkout and trusted-staging boundaries, immutable release identity, build-once exact-artifact publication, nonempty release notes, duplicate guards, atomic release pushes, and recovery after partial failure. Never retry publication automatically or validate the advanced manifest instead of the released artifact. Test ordering and real Git/npm consumers with simulated remote publication, not live publishing workflows or mocked consumer installation.
+
+Maintain separate `Test`, `Lint`, and `Package` workflows and Coveralls upload. Use explicit `matrix.entry` lists of compact inline objects, not `include`/`exclude` or Cartesian axes. Lint JavaScript, YAML, Markdown, embedded JavaScript, and spelling with `npm run lint`; enforce title-case headings/display names, preserve proper names/expressions, and keep reviewed vocabulary in `.spellcheck.txt`. Run `actionlint .github/workflows/*.yml` when changing workflow interfaces. JavaScript Danger checks are not configured.
+
+## Documentation and Versions
+
+Keep Markdown paragraphs on one line. Update documentation with behavior; keep DESIGN current and remove superseded proposals rather than writing an implementation diary. Add changelog entries for features, improvements, and fixes, not minor typos or the initial scaffold. Use actual PR numbers and contributor attribution, oldest to newest above the final Next placeholder; predict the number before opening and verify/correct it afterward. See CONTRIBUTING for the exact entry format.
+
+Before changing the version, check the npm registry to establish whether the current version was released; ask if status cannot be established. Keep unreleased versions unchanged, including the initial `0.1.0`. If released, include the bump in the same PR as the change and synchronize `package.json`, `package-lock.json`, and the Next changelog heading. Features in `0.x` increment minor and reset patch (`0.1.1` to `0.2.0`); features in `1.x` and later increment minor while preserving patch (`5.3.1` to `5.4.1`). Breaking changes are allowed within `0.x`: increment minor and reset patch when released, without requesting a major bump. For breaking changes in `1.x` and later, ask before choosing a major bump. Document breaking behavior and migration guidance.
+
+## Git and Publication Safety
+
+Inspect status, branches, and worktrees before switching. Preserve unrelated work. Use topic branches from `master` named `<username>/<topic>` (`dblock` by default), in the existing checkout; use worktrees only for parallel tasks. Prefer one coherent commit per PR. Allow squash or rebase merges, not merge commits. No ordinary development commits/pushes directly to the default branch and never force-push `master`.
+
+Task-owned PR commits may be amended/squashed without asking: verify ownership, record the remote SHA, reconcile remote changes, run local checks, then push with `--force-with-lease=refs/heads/<branch>:<recorded-sha>`. Never rewrite work owned by another contributor. After merges, fetch/prune, verify the merged PR state through GitHub, inspect dirty/untracked and dependent work, switch safely to `master`, and remove only clean, unneeded worktrees and merged local branches. Force-delete a branch only after verifying no unmerged work or dependencies would be lost; never delete active branches or discard work.
+
+Include the Copilot co-author trailer in AI-assisted commits and disclose AI authorship on behalf of `@dblock` in AI-authored PRs/comments. Let closing PR references close issues on merge, not manual issue closure. Never merge, publish, tag, create releases, or set up credentials without explicit authorization; never overwrite published versions or release tags.
+
+Plan a separately authorized manual first npm release at `0.1.0`, publishing the validated actual tarball with interactive authentication and verifying the registry version and matching tag. Only afterward configure npm Trusted Publishing and an OIDC release workflow, in a focused PR with separate authorization. Do not store long-lived npm tokens. No direct-push release-automation exception is authorized yet; document any later authorization and protection changes explicitly. See [RELEASING.md](RELEASING.md).
