@@ -1,0 +1,47 @@
+name: Release with Composite Action
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional numeric release version.
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release Package
+    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Check Out Default Branch
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Set Up Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '26'
+          package-manager-cache: false
+      - name: Select npm Version
+        run: npm install --global npm@12
+      - name: Install Project Dependencies
+        run: npm ci
+      - name: Configure Git Identity
+        run: |
+          git config --local user.name 'github-actions[bot]'
+          git config --local user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Release Package
+        uses: dblock/npm-package-release@master
+        with:
+          version: ${{ inputs.version }}

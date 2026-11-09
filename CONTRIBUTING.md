@@ -1,6 +1,6 @@
 # Contributing
 
-Read [DESIGN.md](DESIGN.md) for the approved scope and current scaffold limitations.
+Read [DESIGN.md](DESIGN.md) for the scope and release invariants, and [Detailed Usage](docs/usage.md) for CLI/API configuration and recovery.
 
 ## Setup and Validation
 
@@ -10,11 +10,11 @@ Run `npm test` and `npm run lint` locally before every development push, includi
 
 To test a retained artifact without repacking, use `PACKAGE_ARCHIVE=/absolute/path/package.tgz npm run test:package`. Unset and empty `PACKAGE_ARCHIVE` both build once in an owned temporary directory; tests remove their own temporary directories, never a caller-provided archive. Check both cases with `npm run test:package` and `PACKAGE_ARCHIVE='' npm run test:package`.
 
-`npm run lint` checks JavaScript, YAML, Markdown source, embedded JavaScript, spelling, single-line paragraphs, and title-case Markdown headings and workflow/job/step display names. Preserve proper names, acronyms, expressions, and code identifiers. Fix spelling mistakes and keep reviewed vocabulary in `.spellcheck.txt` with the bundled English dictionary. Validate workflow syntax with `actionlint .github/workflows/*.yml` when changing workflow interfaces; this is separate from the YAML-aware display-name checker.
+`npm run lint` checks JavaScript, YAML, Markdown source, embedded JavaScript, spelling, single-line paragraphs, and title-case Markdown headings and workflow/job/step display names. Preserve proper names, acronyms, expressions, and code identifiers. Fix spelling mistakes and keep reviewed vocabulary in `.spellcheck.txt` with the bundled English dictionary. Validate workflow syntax with `actionlint .github/workflows/*.yml examples/*.yml` when changing workflow interfaces; this is separate from the YAML-aware display-name checker.
 
 ## Tests
 
-Focused unit tests live in `test/`; packed consumers live in `test/integration/` and share CLI assertions in `test/helpers/`. Source and installed CLI checks verify output channels, unsupported commands, and incompatible flags. The scaffold's workflow checker tests both valid and invalid YAML display names without treating arbitrary `name` keys as display names.
+Focused unit/release tests live in `test/`; packed consumers live in `test/integration/` and share CLI assertions and real release fixtures in `test/helpers/`. Source and installed CLI checks verify output channels, unsupported commands, and incompatible flags. Release fixtures run real Git remotes, npm tests/lint, archive construction, and strict-engine consumer installation while intercepting only registry lookup/publication and GitHub Release creation. The packed consumer runs the installed library's release sequence and, on Unix, the actual release CLI command from each YAML interface with isolated npm/GitHub publication shims. This Bash integration is not run on Windows; cross-platform unit/API consumers still run there. Workflow checker tests cover valid and invalid YAML display names without treating arbitrary `name` keys as display names.
 
 Initial release implementation should approach full line and branch coverage of project-owned runtime code with meaningful behavior tests, including subprocesses and error paths; report remaining gaps rather than hiding code or adding trivial assertions. Simulate publication and hosting, but exercise real Git remotes, npm archives, and consumer installation. Consumer checks do not validate live Actions authentication or artifact uploads.
 

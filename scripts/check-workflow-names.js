@@ -32,14 +32,32 @@ export function checkWorkflowNames(source) {
       check(step.name, `jobs.${id}.steps[${index}].name`);
     }
   }
+  if (workflow?.runs?.using === "composite") {
+    for (const [index, step] of (workflow.runs.steps ?? []).entries()) {
+      check(step.name, `runs.steps[${index}].name`);
+    }
+  }
   return errors;
 }
 
 async function main() {
-  const directory = ".github/workflows";
-  const files = (await readdir(directory)).filter((file) => /\.ya?ml$/u.test(file)).sort();
+  const files = [];
+  for (const directory of [".github/workflows", "examples"]) {
+    try {
+      files.push(...(await readdir(directory)).filter((file) => /\.ya?ml$/u.test(file)).sort()
+        .map((file) => `${directory}/${file}`));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+  try {
+    await readFile("action.yml");
+    files.push("action.yml");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
   for (const file of files) {
-    const path = `${directory}/${file}`;
+    const path = file;
     try {
       for (const error of checkWorkflowNames(await readFile(path, "utf8"))) {
         process.stderr.write(`${path}: ${error.path}: ${error.message}\n`);

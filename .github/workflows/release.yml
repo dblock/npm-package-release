@@ -1,0 +1,77 @@
+name: Release npm Package
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version used for release tooling and project validation.
+        type: string
+        default: '26'
+      npm-version:
+        description: Compatible npm CLI version with Trusted Publishing support.
+        type: string
+        default: '12'
+      config:
+        description: Trusted ESM configuration module in the calling repository.
+        type: string
+        default: npr.config.js
+      version:
+        description: Optional numeric release version overriding package.json.
+        type: string
+      timezone:
+        description: Named timezone for release dates and Git timestamps.
+        type: string
+        default: UTC
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: npm-package-release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release npm Package
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      NPR_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      NPR_CONFIG: ${{ inputs.config }}
+      NPR_VERSION: ${{ inputs.version }}
+      NPR_TIMEZONE: ${{ inputs.timezone }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check Out Default Branch
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Set Up Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          package-manager-cache: false
+      - name: Select npm Version
+        env:
+          NPR_NPM_VERSION: ${{ inputs.npm-version }}
+        run: npm install --global "npm@$NPR_NPM_VERSION"
+      - name: Install Project Dependencies
+        run: npm ci
+      - name: Configure Git Identity
+        run: |
+          git config --local user.name 'github-actions[bot]'
+          git config --local user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Release Package
+        run: npm exec --offline -- npr release --config "$NPR_CONFIG" --version "$NPR_VERSION" --artifacts "$RUNNER_TEMP/npr-release"
+      - name: Preserve Release Artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: npm-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/npr-release
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30

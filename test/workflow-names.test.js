@@ -56,6 +56,12 @@ test("invalid YAML is rejected instead of silently skipped", () => {
   assert.throws(() => checkWorkflowNames("name: [\n"));
 });
 
+test("composite-action step names use title case without checking input names", () => {
+  const source = "name: npm Package Release\ninputs:\n  name:\n    description: arbitrary value\nruns:\n  using: composite\n  steps:\n    - name: release package\n      shell: bash\n      run: npm test\n";
+  assert.deepEqual(checkWorkflowNames(source).map(({ path }) => path), ["runs.steps[0].name"]);
+  assert.deepEqual(checkWorkflowNames(source.replace("release package", "Release Package")), []);
+});
+
 test("the workflow checker reports YAML and capitalization errors through its exit status", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "npm-package-release-workflows-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
