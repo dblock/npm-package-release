@@ -8,7 +8,7 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "npm-package-release": "./bin/npm-package-release.js"
+    "npr": "./bin/npr.js"
   },
   "files": [
     "src/",

@@ -3,7 +3,7 @@
 import process from "node:process";
 import { version } from "../src/index.js";
 
-const help = `Usage: npm-package-release [--help | --version]
+const help = `Usage: npr [--help | --version]
 
 Release commands are not implemented yet.
 `;

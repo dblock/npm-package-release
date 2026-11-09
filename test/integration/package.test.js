@@ -46,7 +46,7 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   const files = listing.stdout.trim().split(/\r?\n/u);
   for (const file of [
     "package/src/index.js",
-    "package/bin/npm-package-release.js",
+    "package/bin/npr.js",
     "package/README.md",
     "package/LICENSE",
     "package/DESIGN.md",
@@ -67,6 +67,6 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   ], { cwd: consumer, encoding: "utf8" });
   assert.equal(imported.status, 0, imported.stderr);
   assert.match(imported.stdout, /^\d+\.\d+\.\d+$/u);
-  checkCli((args) => npm(["exec", "--silent", "--offline", "--", "npm-package-release", ...args], consumer));
+  checkCli((args) => npm(["exec", "--silent", "--offline", "--", "npr", ...args], consumer));
   assert.equal(await digest(), originalDigest);
 });

@@ -12,14 +12,14 @@ Requires Node.js 22.14+, 24, or 26 and newer supported releases. Until publicati
 
 ## Usage
 
-Only CLI help and version reporting are available from the source checkout:
+The CLI is named `npr`; the npm package remains `npm-package-release`. Only help and version reporting are available from the source checkout:
 
 ```sh
-node bin/npm-package-release.js --help
+node bin/npr.js --help
 ```
 
 ```text
-Usage: npm-package-release [--help | --version]
+Usage: npr [--help | --version]
 
 Release commands are not implemented yet.
 ```

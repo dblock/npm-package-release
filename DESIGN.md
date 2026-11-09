@@ -12,9 +12,9 @@ Consumers require Node.js 22.14 or newer on supported release lines (22, 24, and
 
 ## Planned Release Interfaces
 
-Provide a JavaScript API and `npm-package-release` CLI with preparation, publication, and next-development phases. A reusable GitHub Actions workflow and root composite action will call the same implementation. Keep the workflow independent of moving composite-action references. The reusable workflow owns environment, permissions, concurrency, and runner setup; composite callers own those settings.
+Provide a JavaScript API and `npr` CLI with preparation, publication, and next-development phases. Keep `npm-package-release` as the repository and npm package name; use `npr` for CLI and configuration names. A reusable GitHub Actions workflow and root composite action will call the same implementation. Keep the workflow independent of moving composite-action references. The reusable workflow owns environment, permissions, concurrency, and runner setup; composite callers own those settings.
 
-An explicit ESM configuration module will choose the changelog format and trusted preparation/validation hooks. Begin with a single root `package.json` and optional `package-lock.json`; update both when the version changes. Support the checked-in version or a selected numeric release version, UTC or a named timezone, Intridea Next headings or Keep a Changelog, and a next-patch development version. Add SemVer and Markdown-parser runtime dependencies during implementation, selecting current compatible stable releases and preserving unrelated source formatting.
+An explicit ESM configuration module, `npr.config.js`, will choose the changelog format and trusted preparation/validation hooks. Begin with a single root `package.json` and optional `package-lock.json`; update both when the version changes. Support the checked-in version or a selected numeric release version, UTC or a named timezone, Intridea Next headings or Keep a Changelog, and a next-patch development version. Add SemVer and Markdown-parser runtime dependencies during implementation, selecting current compatible stable releases and preserving unrelated source formatting.
 
 ## Planned Release Invariants
 

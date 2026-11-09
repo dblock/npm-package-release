@@ -4,7 +4,7 @@ export function checkCli(run) {
   for (const args of [[], ["--help"]]) {
     const result = run(args);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^Usage: npm-package-release /u);
+    assert.match(result.stdout, /^Usage: npr /u);
     assert.match(result.stdout, /Release commands are not implemented yet\./u);
     assert.equal(result.stderr, "");
   }
