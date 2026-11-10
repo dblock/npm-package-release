@@ -154,7 +154,12 @@ test("failed next-development validation preserves the published release without
 
 test("a concurrent remote branch advance after publication prevents the atomic push", async (t) => {
   const fixture = await releaseFixture(t, {
-    onPublish: async ({ git }) => { await git("push", "origin", "HEAD:master"); },
+    onPublish: async ({ git }) => {
+      const parent = (await git("rev-parse", "HEAD^")).trim();
+      const tree = (await git("rev-parse", `${parent}^{tree}`)).trim();
+      const concurrent = (await git("commit-tree", tree, "-p", parent, "-m", "Unrelated concurrent work")).trim();
+      await git("push", "origin", `${concurrent}:master`);
+    },
   });
   await assert.rejects(release(fixture.config, fixture), /Remote branch advanced/u);
   assert.equal(fixture.published.length, 1);

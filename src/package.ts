@@ -147,7 +147,31 @@ export class NpmPackage implements PackageProject, PackagePublisher {
   }
 
   async publish(archive: string) {
-    await this.npm(["publish", archive, "--ignore-scripts", "--access=public", "--tag=latest",
-      "--registry=https://registry.npmjs.org/"]);
+    const identity: ReleaseIdentity = JSON.parse(await this.run("tar", ["-xOf", archive, "package/package.json"]));
+    numericVersion(identity.version);
+    if (typeof identity.name !== "string" || !/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/u.test(identity.name)) {
+      throw new Error("Invalid packed package name.");
+    }
+    const artifact = await this.inspect(archive, identity);
+    const published = async () => {
+      const metadata = await this.view(identity.name, identity.version);
+      if (!metadata) return false;
+      matchingPublication(metadata, artifact);
+      return true;
+    };
+    if (await published()) return;
+    try {
+      await this.npm(["publish", archive, "--ignore-scripts", "--access=public", "--tag=latest",
+        "--registry=https://registry.npmjs.org/"]);
+    } catch (error) {
+      if (await published()) return;
+      throw error;
+    }
+  }
+}
+
+export function matchingPublication(metadata: RegistryMetadata, artifact: Artifact): void {
+  if (metadata.dist?.integrity !== artifact.integrity || metadata.dist?.shasum !== artifact.shasum) {
+    throw new Error("Published archive integrity mismatch or unavailable; refusing to republish.");
   }
 }

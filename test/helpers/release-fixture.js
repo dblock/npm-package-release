@@ -45,6 +45,7 @@ export async function releaseFixture(t, settings = {}) {
   const events = [];
   const lookups = [];
   const published = [];
+  let hosted;
   let visibleLookups = 0;
   const run = async (program, args, options) => {
     const operation = `${program} ${args[0]}`;
@@ -75,7 +76,28 @@ export async function releaseFixture(t, settings = {}) {
       await settings.onPublish?.({ cwd, remote, git, events, archive: args[1] });
       return "";
     }
-    if (program === "gh") return "";
+    if (program === "gh") {
+      if (args[0] === "api") {
+        if (!hosted) throw Object.assign(new Error("Hosted release not found"), { stdout: "HTTP/2.0 404 Not Found\n\n{}", code: 1 });
+        return "HTTP/2.0 200 OK\n\n" + JSON.stringify(hosted);
+      }
+      if (args[0] !== "release") throw new Error("Unexpected hosted operation");
+      const archive = args[3];
+      const asset = {
+        name: archive.split(/[\\/]/u).at(-1),
+        digest: "sha256:" + createHash("sha256").update(await readFile(archive)).digest("hex"),
+      };
+      if (args[1] === "create") {
+        if (hosted) throw new Error("Duplicate hosted release");
+        hosted = {
+          tag_name: args[2], name: args[args.indexOf("--title") + 1],
+          body: await readFile(args[args.indexOf("--notes-file") + 1], "utf8"),
+          draft: false, prerelease: false, assets: [asset],
+        };
+      } else if (args[1] === "upload") hosted.assets.push(asset);
+      else throw new Error("Unexpected hosted operation");
+      return "";
+    }
     return await command(program, args, options);
   };
   const config = {

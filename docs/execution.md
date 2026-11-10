@@ -62,6 +62,6 @@ A `succeeded` callback failure is reported as `workflow:success` and fails the i
 
 ## Current Limits and Next Work
 
-Provider-neutral contexts do not yet make release operations independently idempotent. Existing package versions, tags, and artifact directories still fail closed, and recovery remains manual. Actions still preserves artifacts after the release command; a durable upload checkpoint before publication needs a separate orchestration change.
+New release starts still reject existing package versions, tags, and artifact directories. Explicit checkpoint completion now reconciles matching outputs, and Actions preserves the immutable checkpoint before publication. See [Checkpoints and Reconciliation](checkpoints.md) for the prepare/upload/complete contract and its limits.
 
-Those are the next gaps relative to [ruby-gem-release 0.5.0](https://github.com/dblock/ruby-gem-release/releases/tag/v0.5.0), followed by opt-in semantic selection. Future rerun support should reconcile matching archive checksums, Git trees/refs, and hosted outputs—not infer permission to republish from a completion journal. No successful-skip protocol, semantic workflow, new registry, or live authentication setup is introduced here.
+Opt-in semantic selection remains the next gap relative to [ruby-gem-release 0.5.0](https://github.com/dblock/ruby-gem-release/releases/tag/v0.5.0). Completion reconciles archive checksums, Git trees/refs, and hosted outputs—not permission inferred from a completion journal. No successful-skip protocol, semantic workflow, new registry, or live authentication setup is introduced here.

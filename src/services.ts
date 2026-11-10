@@ -1,9 +1,11 @@
 import { readFile, writeFile, mkdir, readdir, rename } from "node:fs/promises";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { basename, join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { inc, valid } from "semver";
 import { numericVersion } from "./command.js";
 import { releaseChangelog, nextChangelog } from "./changelog.js";
+import { matchingPublication } from "./package.js";
 import type {
   Artifact, ArtifactContext, Changelog, ChangelogConfig, Command, HookContext, Log, PackagePublisher,
   RegistryVerifier, ReleaseConfig, ReleaseHost, ReleaseIdentity, ReleaseState, ReleaseStore,
@@ -55,9 +57,61 @@ export class GitHubReleaseHost implements ReleaseHost {
   }
 
   async create(release: ReleaseIdentity, { archive, notes }: { archive: string; notes: string }) {
-    await this.run("gh", ["release", "create", `v${release.version}`, archive, "--repo", this.repository,
-      "--verify-tag", "--title", release.version, "--notes-file", notes]);
+    numericVersion(release.version);
+    const body = (await readFile(notes, "utf8")).replaceAll("\r\n", "\n").trimEnd();
+    const digest = "sha256:" + createHash("sha256").update(await readFile(archive)).digest("hex");
+    const name = basename(archive);
+    const inspect = async () => {
+      const metadata = await this.metadata(release.version);
+      if (!metadata) return null;
+      if (metadata.tag_name !== `v${release.version}` || metadata.name !== release.version ||
+        typeof metadata.body !== "string" || metadata.body.replaceAll("\r\n", "\n").trimEnd() !== body ||
+        metadata.draft !== false || metadata.prerelease !== false || !Array.isArray(metadata.assets)) {
+        throw new Error("Hosted release metadata differs; refusing to overwrite it.");
+      }
+      const assets = metadata.assets.filter((asset) => asset.name === name);
+      if (assets.length > 1 || (assets.length === 1 && assets[0].digest !== digest)) {
+        throw new Error("Hosted release asset checksum differs or is unavailable.");
+      }
+      return assets.length === 1;
+    };
+    const existing = await inspect();
+    if (existing === true) return;
+    try {
+      await this.run("gh", existing === null
+        ? ["release", "create", `v${release.version}`, archive, "--repo", this.repository,
+          "--verify-tag", "--title", release.version, "--notes-file", notes]
+        : ["release", "upload", `v${release.version}`, archive, "--repo", this.repository]);
+    } catch (error) {
+      if (await inspect() === true) return;
+      throw error;
+    }
+    if (await inspect() !== true) throw new Error("Hosted release output could not be verified.");
   }
+
+  private async metadata(version: string): Promise<HostedMetadata | null> {
+    let output: string;
+    try {
+      output = await this.run("gh", ["api", "--include", `repos/${this.repository}/releases/tags/v${version}`]);
+    } catch (error) {
+      if (/^HTTP\/[\d.]+ 404\b/u.test((error as { stdout?: string }).stdout || "")) return null;
+      throw error;
+    }
+    const response = /^HTTP\/[\d.]+ 200[^\r\n]*\r?\n(?:[^\r\n]+\r?\n)*\r?\n([\s\S]*)$/u.exec(output);
+    if (!response) throw new Error("Invalid hosted release response.");
+    const metadata = JSON.parse(response[1]);
+    if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) throw new Error("Invalid hosted release metadata.");
+    return metadata;
+  }
+}
+
+interface HostedMetadata {
+  tag_name: string;
+  name: string;
+  body: string;
+  draft: boolean;
+  prerelease: boolean;
+  assets: { name: string; digest?: string }[];
 }
 
 export class HookValidator implements ReleaseValidator {
@@ -105,9 +159,7 @@ export class RegistryVisibility implements RegistryVerifier {
     for (let attempt = 0; attempt < attempts; attempt++) {
       const metadata = await this.publisher.view(state.name, state.version);
       if (metadata) {
-        if (metadata.dist?.integrity !== state.artifact.integrity || metadata.dist?.shasum !== state.artifact.shasum) {
-          throw new Error("Published archive integrity mismatch.");
-        }
+        matchingPublication(metadata, state.artifact);
         return "verified";
       }
       if (attempt + 1 < attempts) {

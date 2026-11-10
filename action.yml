@@ -13,7 +13,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Release Package
+    - name: Prepare Release
       shell: bash
       env:
         NPR_CONFIG: ${{ inputs.config }}
@@ -22,7 +22,24 @@ runs:
         NPR_ARTIFACTS: ${{ runner.temp }}/npr-release
         NPR_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         GH_TOKEN: ${{ github.token }}
-      run: npm exec --offline -- npr release --config "$NPR_CONFIG" --version "$NPR_VERSION" --artifacts "$NPR_ARTIFACTS"
+      run: npm exec --offline -- npr prepare --config "$NPR_CONFIG" --version "$NPR_VERSION" --artifacts "$NPR_ARTIFACTS"
+    - name: Preserve Publication Checkpoint
+      uses: actions/upload-artifact@v7.0.2
+      with:
+        name: npm-release-checkpoint-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/npr-release
+        include-hidden-files: true
+        if-no-files-found: error
+        retention-days: 30
+    - name: Complete Release
+      shell: bash
+      env:
+        NPR_CONFIG: ${{ inputs.config }}
+        NPR_ARTIFACTS: ${{ runner.temp }}/npr-release
+        NPR_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        NPR_TIMEZONE: ${{ inputs.timezone }}
+        GH_TOKEN: ${{ github.token }}
+      run: npm exec --offline -- npr complete --config "$NPR_CONFIG" --artifacts "$NPR_ARTIFACTS"
     - name: Preserve Release Artifacts
       if: ${{ always() }}
       uses: actions/upload-artifact@v7.0.2

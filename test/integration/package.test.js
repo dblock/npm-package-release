@@ -77,8 +77,8 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   await checkComposition(t, installedApi);
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider } from "npm-package-release";
-import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, complete } from "npm-package-release";
+import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, CheckpointWorkflow } from "npm-package-release";
 class Inspect implements Step<PreparedRelease, PreparedRelease> {
   readonly id = "inspect";
   async run(input: PreparedRelease, execution?: ExecutionContext) {
@@ -90,6 +90,13 @@ const flow = Workflow.start<ReleaseOptions>({}, new LocalExecutionProvider({}))
   .then(new InitializeRelease({ changelog: null }))
   .then(new PrepareRelease()).then(new Inspect());
 export async function run(options: ReleaseOptions) { return flow.run(options); }
+export async function staged(options: ReleaseOptions) {
+  const workflow = new ReleaseWorkflow({ changelog: null });
+  workflow satisfies CheckpointWorkflow;
+  const built = await prepare(workflow, options);
+  built.state.artifact.integrity satisfies string;
+  return complete(workflow, options);
+}
 // @ts-expect-error Prepared releases cannot skip artifact validation.
 flow.then(new PublishArtifact());
 `);

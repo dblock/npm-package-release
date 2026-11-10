@@ -44,7 +44,7 @@ The default validation runs `npm test` and `npm run lint` before publication and
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Composable Workflows](docs/workflows.md), and [Execution Providers and Contexts](docs/execution.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), and [Checkpoints and Reconciliation](docs/checkpoints.md).
 
 ## License
 

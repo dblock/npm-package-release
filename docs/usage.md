@@ -12,12 +12,16 @@ The package has not been published yet. Until its first release, build/install i
 npm exec --offline -- npr --help
 npm exec --offline -- npr release
 npm exec --offline -- npr release --version 1.2.3 --config npr.config.js
+npm exec --offline -- npr prepare --artifacts /path/to/checkpoint
+npm exec --offline -- npr complete --artifacts /path/to/checkpoint
 npm exec --offline -- npr verify --artifacts /path/to/retained-artifacts
 ```
 
 `release` publishes and pushes: obtain authorization and configure authentication first. It releases the checked-in version unless `--version` selects a numeric version, then prepares the next patch version. `--config` defaults to `npr.config.js`; use an ESM file (`.mjs` when the consumer declares CommonJS). `--artifacts` overrides the default Git-metadata directory. Empty version/artifact values are treated as unset. Put artifacts outside the source tree or in an ignored directory.
 
 `verify` reads `release.json` and its archive, checks the remote lightweight release tag and explicit registry version, and never publishes, commits, pushes, or creates hosted releases. Supply the complete retained directory; do not substitute a rebuilt archive.
+
+`prepare` stops after validation and immutable checkpoint creation, without publishing or pushing. Preserve the entire directory durably before invoking `complete`, which restores and reconciles that explicit checkpoint. Complete rejects `--version`: the checkpoint already captures the release identity. Both accept `--config` and `--artifacts`; see [Checkpoints and Reconciliation](checkpoints.md).
 
 Help/version and phase reports go to standard output. Errors go to standard error with exit status 1. Success, including visibility timeout with an explicitly unverified result, returns 0. Machine-readable state belongs in `release.json`, not parsed human log lines. Reports follow lifecycle order; there is no sorting, deduplication, or source-location diagnostic format. Unknown options/positionals fail; standalone `--help`/`--version` cannot be combined, and `verify` rejects release-only options.
 
@@ -29,6 +33,7 @@ Representative release output:
 [npr] validated: example@0.1.0
 [npr] building: example@0.1.0
 [npr] built: example@0.1.0
+[npr] checkpoint: example@0.1.0
 [npr] publishing: example@0.1.0
 [npr] published: example@0.1.0
 [npr] pushed: example@0.1.0
@@ -96,9 +101,9 @@ The default release and verification return retained state snapshots. A custom w
 
 Copy [the caller example](../examples/release.yml) to the consumer's `.github/workflows/release.yml`. It uses `workflow_dispatch`, grants `contents: write` and `id-token: write`, and calls this repository's reusable `release.yml`. The example currently references `master` because no release tag exists yet; pin a reviewed commit now and a reviewed immutable release tag when available. Keep `npm-package-release` installed in the caller's locked development dependencies.
 
-The reusable workflow accepts `node-version` (26), `npm-version` (12), `config` (`npr.config.js`), optional `version`, and `timezone` (UTC). Runtime/tooling versions must be compatible with each other and the caller's package. It runs only for manual dispatch on the default branch, uses the `release` environment and repository-level concurrency, installs dependencies without caching, configures Git identity, invokes the CLI, and always attempts recovery-artifact upload.
+The reusable workflow accepts `node-version` (26), `npm-version` (12), `config` (`npr.config.js`), optional `version`, and `timezone` (UTC). Runtime/tooling versions must be compatible with each other and the caller's package. It runs only for manual dispatch on the default branch, uses the `release` environment and repository-level concurrency, installs dependencies without caching, configures Git identity, prepares the release, requires a successful checkpoint upload, then completes publication. It always attempts a separate diagnostic-artifact upload.
 
-For step-based integration, adapt the [composite caller example](../examples/action-release.yml), using `dblock/npm-package-release@<reviewed-commit>` after checking out the attached default branch with full history, setting up compatible Node/npm, installing dependencies, and configuring Git identity. Its inputs are `config`, optional `version`, and `timezone`. The caller must supply manual-dispatch/default-branch guards, the `release` environment, contents/OIDC permissions, and non-canceling release concurrency; the composite action runs the same CLI and failure-aware artifact upload. It does not configure repository protections or npm credentials.
+For step-based integration, adapt the [composite caller example](../examples/action-release.yml), using `dblock/npm-package-release@<reviewed-commit>` after checking out the attached default branch with full history, setting up compatible Node/npm, installing dependencies, and configuring Git identity. Its inputs are `config`, optional `version`, and `timezone`. The caller must supply manual-dispatch/default-branch guards, the `release` environment, contents/OIDC permissions, and non-canceling release concurrency; the composite action uses the same upload-gated handoff and failure-aware diagnostic upload. It does not configure repository protections or npm credentials. Run-only custom workflow classes must implement the staged contract before using either Actions interface.
 
 Existing packages need an authorized npm Trusted Publisher for the calling repository, caller workflow filename `release.yml`, environment `release`, and direct `npm publish` permission. npm validates the calling workflow filename even when publication happens in a reusable workflow. Initial publication is manual before configuring Trusted Publishing; see [RELEASING](../RELEASING.md#subsequent-trusted-publishing). Do not use `npm whoami` as an OIDC permission check or store long-lived publish tokens.
 
@@ -108,6 +113,6 @@ Release commits and tags require direct-push permission on the default branch. C
 
 Never blindly rerun publication. Inspect `release.json` (phase, identity, refs, integrity, verification, and error), retained archive, notes, and `release.bundle` (plus `next.bundle` when the development commit was prepared); then inspect registry metadata, remote refs, and hosted releases. A `publishing` phase can mean acceptance followed by a transport failure, so an error is not proof that npm rejected the upload. A published archive cannot be replaced.
 
-Complete only missing push/hosting/next-development steps using the existing release commit, tag, and exact archive. Check the registry before any manual publication retry. Do not move release tags or rebuild an archive to match metadata. After downloading complete recovery artifacts, `npr verify --artifacts PATH` can recheck without republishing, even after the manifest advances. Before a later independent release, archive the previous local artifact directory and choose a new empty directory; the tool intentionally refuses existing artifacts.
+After inspecting and downloading a complete trusted checkpoint, explicitly authorized `npr complete --config npr.config.js --artifacts PATH` reconciles actual outputs and completes missing operations using the existing release commit, tag, and exact archive. It ignores diagnostic phase flags, skips matching publications, and rejects conflicting or unverifiable outputs. Do not move release tags or rebuild an archive to match metadata. `npr verify --artifacts PATH` rechecks without mutation, even after the manifest advances. Before a later independent release, archive the previous local artifact directory and choose a new empty directory; the tool intentionally refuses existing artifacts. See [Checkpoints and Reconciliation](checkpoints.md) for restoration and later-history limits.
 
-Visibility timeout records `verification: "unverified"` and “release could not be verified,” without blocking hosted-release creation or next-development preparation. A later verify command may confirm propagation. Authentication, network, malformed metadata, identity, and integrity failures remain errors. Registry visibility checks do not prove live OIDC configuration, and runner loss before the always-upload step can still lose artifacts.
+Visibility timeout records `verification: "unverified"` and “release could not be verified,” without blocking hosted-release creation or next-development preparation. A later verify command may confirm propagation. Authentication, network, malformed metadata, identity, and integrity failures remain errors. Registry visibility checks do not prove live OIDC configuration. Actions checkpoints precede publication, but retention expiry and local-only artifact loss still require operator planning.
