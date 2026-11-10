@@ -94,8 +94,12 @@ export function nextChangelog(source: string, { format, version, releasedVersion
   const current = section(source, new RegExp(intridea
     ? `^${releasedVersion.replaceAll(".", "\\.")} \\(\\d{4}/\\d{2}/\\d{2}\\)$`
     : `^\\[${releasedVersion.replaceAll(".", "\\.")}\\] - \\d{4}-\\d{2}-\\d{2}$`, "u"));
-  if (headings(source).some(({ text }) => intridea ? text.endsWith(" (Next)") : text === "[Unreleased]")) {
-    throw new Error("Unreleased heading already exists.");
+  const pending = headings(source).filter(({ text }) => intridea ? text.endsWith(" (Next)") : text === "[Unreleased]");
+  if (pending.length) {
+    const expected = intridea ? `${version} (Next)` : "[Unreleased]";
+    if (pending.length === 1 && pending[0].text === expected &&
+      section(source, intridea ? /^\d+\.\d+\.\d+ \(Next\)$/u : /^\[Unreleased\]$/u).end === current.start) return source;
+    throw new Error("Unreleased heading already exists with conflicting version or position.");
   }
   const newline = source.includes("\r\n") ? "\r\n" : "\n";
   const heading = `${"#".repeat(current.node.depth)} ${intridea ? `${version} (Next)` : "[Unreleased]"}`;

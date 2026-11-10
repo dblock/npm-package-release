@@ -13,6 +13,7 @@ test("Intridea releases preserve source/Unicode and insert the next section", ()
   assert.doesNotMatch(released.notes, /Your contribution/u);
   const next = nextChangelog(released.source, { format: "intridea", version: "0.1.1", releasedVersion: "0.1.0" });
   assert.match(next, /## 0\.1\.1 \(Next\)\n\n- Your contribution here\.\n\n## 0\.1\.0/u);
+  assert.equal(nextChangelog(next, { format: "intridea", version: "0.1.1", releasedVersion: "0.1.0" }), next);
 });
 
 test("Keep a Changelog updates compare references and preserves historical content", () => {
@@ -23,6 +24,7 @@ test("Keep a Changelog updates compare references and preserves historical conte
   assert.match(released.source, /\[0\.0\.1\]: https:\/\/github\.com\/a\/b\/releases\/tag\/v0\.0\.1/u);
   const next = nextChangelog(released.source, { format: "keep-a-changelog", version: "0.1.1", releasedVersion: "0.1.0" });
   assert.match(next, /## \[Unreleased\]\n\n## \[0\.1\.0\]/u);
+  assert.equal(nextChangelog(next, { format: "keep-a-changelog", version: "0.1.1", releasedVersion: "0.1.0" }), next);
 });
 
 test("CRLF paragraphs and fenced/quoted fake headings are preserved", () => {

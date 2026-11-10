@@ -64,8 +64,18 @@ jobs:
         run: |
           git config --local user.name 'github-actions[bot]'
           git config --local user.email '41898282+github-actions[bot]@users.noreply.github.com'
-      - name: Release Package
-        run: npm exec --offline -- npr release --config "$NPR_CONFIG" --version "$NPR_VERSION" --artifacts "$RUNNER_TEMP/npr-release"
+      - name: Prepare Release
+        run: npm exec --offline -- npr prepare --config "$NPR_CONFIG" --version "$NPR_VERSION" --artifacts "$RUNNER_TEMP/npr-release"
+      - name: Preserve Publication Checkpoint
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: npm-release-checkpoint-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/npr-release
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Complete Release
+        run: npm exec --offline -- npr complete --config "$NPR_CONFIG" --artifacts "$RUNNER_TEMP/npr-release"
       - name: Preserve Release Artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v7.0.2

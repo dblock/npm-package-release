@@ -24,6 +24,7 @@ test("CLI flags and configuration errors fail without publishing", async (t) => 
     ["release", "--unknown"], ["release", "--version"],
     ["release", "extra"], ["verify", "--config", "npr.config.js"],
     ["verify", "--artifacts", cwd],
+    ["complete", "--version", "1.0.0"], ["complete"],
   ]) {
     const result = spawnSync(process.execPath, [entry, ...args], { cwd, encoding: "utf8" });
     assert.equal(result.status, 1, JSON.stringify(args));
@@ -51,4 +52,9 @@ export default Workflow.start().then(new ProjectRelease());
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, "Custom release 1.2.3\n");
   assert.equal(result.stderr, "");
+  const unsupported = spawnSync(process.execPath, [entry, "prepare", "--config", "npr.config.mjs"], {
+    cwd, encoding: "utf8",
+  });
+  assert.equal(unsupported.status, 1);
+  assert.match(unsupported.stderr, /must implement prepare and complete/u);
 });

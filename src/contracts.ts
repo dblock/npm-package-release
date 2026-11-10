@@ -99,16 +99,25 @@ export interface ReleaseRepository {
   readonly remote: string;
   readonly initialCommit: string;
   initialize(): Promise<void>;
+  restore(source: RepositoryCheckpoint, bundle: string, version: string): Promise<void>;
   clean(): Promise<void>;
   current(expected: string): Promise<void>;
   missingTag(version: string): Promise<void>;
   stage(edits: () => Promise<void>): Promise<string>;
   unchanged(tree: string): Promise<void>;
   commit(message: string, tree: string): Promise<string>;
-  tag(version: string): Promise<void>;
+  nextIteration(releaseCommit: string, nextVersion: string): Promise<{ readonly commit: string; readonly tree: string } | null>;
+  tag(version: string, commit?: string): Promise<void>;
   bundle(path: string, version: string): Promise<void>;
   push(commit: string, version?: string): Promise<void>;
   verifyTag(version: string, commit: string): Promise<void>;
+}
+export interface RepositoryCheckpoint {
+  readonly branch: string;
+  readonly remote: string;
+  readonly initialCommit: string;
+  readonly releaseCommit: string;
+  readonly preparedTree: string;
 }
 export interface PackageProject {
   read(): Promise<PackageManifest>;

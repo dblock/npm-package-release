@@ -1,12 +1,13 @@
 import {
   Workflow, InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact,
   PublishArtifact, release, ReleaseWorkflow,
-  LocalExecutionProvider,
+  LocalExecutionProvider, prepare, complete,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
   ReleaseHost, ReleaseStore, ReleaseRepository, PackageProject, RegistryVerifier, ReleaseServices,
   ExecutionContext, ExecutionProvider,
+  ReleaseCheckpoint, CheckpointWorkflow,
 } from "../../src/index.js";
 
 class InspectArtifact implements Step<BuiltRelease, BuiltRelease> {
@@ -60,6 +61,20 @@ class Versions implements VersionPolicy {
   select(version: string) { return { version, nextVersion: "1.0.0" }; }
 }
 new ReleaseWorkflow(config, { changelog: new Notes(), versions: new Versions() }, new LocalExecutionProvider({}));
+export async function checkpointContracts() {
+  const workflow = new ReleaseWorkflow(config);
+  workflow satisfies CheckpointWorkflow<BuiltRelease, Awaited<ReturnType<typeof workflow.complete>>>;
+  const built = await prepare(workflow);
+  built.state.artifact.integrity satisfies string;
+  const completed = await complete(workflow);
+  completed.verification satisfies string | undefined;
+}
+export function immutableCheckpoint(checkpoint: ReleaseCheckpoint) {
+  // @ts-expect-error Checkpoint source identity is immutable.
+  checkpoint.source.releaseCommit = "changed";
+  // @ts-expect-error A checkpoint is data, not a workflow with publication capabilities.
+  complete(checkpoint);
+}
 // @ts-expect-error Service implementations must satisfy the complete interface.
 new ReleaseWorkflow(config, { publisher: { async publish() {} } });
 

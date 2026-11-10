@@ -2,14 +2,17 @@ import { resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { release, verify } from "./release.js";
+import { release, verify, prepare, complete } from "./release.js";
 import { version } from "./index.js";
 
 export const help = `Usage: npr [--help | --version]
        npr release [--config npr.config.js] [--version X.Y.Z] [--artifacts PATH]
+       npr prepare [--config npr.config.js] [--version X.Y.Z] [--artifacts PATH]
+       npr complete [--config npr.config.js] [--artifacts PATH]
        npr verify [--artifacts PATH]
 
 Release publishes to npm and pushes Git commits/tags. Verify never publishes.
+Prepare validates and checkpoints without publishing. Complete publishes from that checkpoint.
 `;
 
 export async function main(args = process.argv.slice(2)) {
@@ -22,16 +25,21 @@ export async function main(args = process.argv.slice(2)) {
     return;
   }
   const [action, ...flags] = args;
-  if (!["release", "verify"].includes(action)) throw new Error("Unknown arguments. Use npr --help.");
+  if (!["release", "prepare", "complete", "verify"].includes(action)) throw new Error("Unknown arguments. Use npr --help.");
   const { values, positionals } = parseArgs({
     args: flags,
-    options: { artifacts: { type: "string" }, ...(action === "release" ? {
-      config: { type: "string", default: "npr.config.js" }, version: { type: "string" },
-    } : {}) },
+    options: {
+      artifacts: { type: "string" },
+      ...(action !== "verify" ? { config: { type: "string", default: "npr.config.js" } } : {}),
+      ...(["release", "prepare"].includes(action) ? { version: { type: "string" } } : {}),
+    },
     allowPositionals: true,
   });
   if (positionals.length) throw new Error("Unexpected positional arguments.");
   if (action === "verify") return await verify({ artifacts: values.artifacts as string | undefined });
   const { default: config } = await import(pathToFileURL(resolve(values.config as string)).href);
-  return await release(config, { version: values.version as string | undefined, artifacts: values.artifacts as string | undefined });
+  const options = { version: values.version as string | undefined, artifacts: values.artifacts as string | undefined };
+  if (action === "prepare") return await prepare(config, options);
+  if (action === "complete") return await complete(config, options);
+  return await release(config, options);
 }
