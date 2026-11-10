@@ -5,6 +5,9 @@ import process from "node:process";
 import { command, numericVersion } from "./command.js";
 import { Git } from "./git.js";
 import { NpmPackage } from "./package.js";
+import { Release } from "./release-description.js";
+import { currentExecutionProvider } from "./execution.js";
+import type { ExecutionContext, ExecutionProvider } from "./execution.js";
 import {
   DirectoryReleaseStore, GitHubReleaseHost, HookValidator, MarkdownChangelog, NumericPatchVersions,
   RegistryVisibility, snapshot, verificationOptions,
@@ -34,10 +37,21 @@ export class ReleaseRuntime {
     readonly env: Environment,
     readonly services: ReleaseServices,
     readonly identity: ReleaseState,
+    readonly provider: ExecutionProvider = currentExecutionProvider(env),
   ) {}
 
-  hook(phase: string): HookContext {
+  description(): Release {
+    return new Release({
+      name: this.identity.name, version: this.identity.version, manifestVersion: this.identity.previousVersion,
+      date: this.identity.date, nextVersion: this.identity.nextVersion,
+    });
+  }
+
+  hook(phase: string, execution = this.provider.context({
+    release: this.description(), step: { id: phase }, steps: {}, workflow: { id: "npm-release", steps: [] },
+  })): HookContext {
     return Object.freeze({
+      execution,
       cwd: this.cwd,
       version: phase === "next" ? this.identity.nextVersion : this.identity.version,
       releasedVersion: this.identity.version, previousVersion: this.identity.previousVersion,
@@ -58,6 +72,7 @@ export interface ReleaseContext<Stage extends string, State extends ReleaseState
   readonly kind: Stage;
   readonly runtime: ReleaseRuntime;
   readonly state: Readonly<State>;
+  readonly release: Release;
 }
 export type InitializedRelease = ReleaseContext<"initialized">;
 type PreparedState = ReleaseState & { readonly preparedTree: string };
@@ -83,7 +98,7 @@ export class ReleaseObserver implements WorkflowObserver {
     const state = await runtime.services.store.read();
     await runtime.services.store.save({
       ...state, error: error instanceof Error ? error.message : String(error), failedStep: id,
-      ...(state.phase === "next" ? { verification: "failed" } : {}),
+      ...(state.phase === "next" && state.verification !== "verified" ? { verification: "failed" } : {}),
     });
     runtime.log(`[npr] stopped at ${state.phase}; recovery artifacts: ${runtime.services.store.directory}`);
   }
@@ -97,7 +112,7 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
   readonly id = "initialize";
   constructor(readonly config: ReleaseConfig, readonly services: Partial<ReleaseServices> = {}) {}
 
-  async run(options: ReleaseOptions): Promise<InitializedRelease> {
+  async run(options: ReleaseOptions, execution?: ExecutionContext, injectedProvider?: ExecutionProvider): Promise<InitializedRelease> {
     const config = this.config;
     if (!config || !Object.hasOwn(config, "changelog")) throw new Error("Configure an explicit changelog format, or changelog: null.");
     if (config.changelog !== null && !["intridea", "keep-a-changelog"].includes(config.changelog.format)) {
@@ -108,7 +123,8 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     }
     const { cwd = process.cwd(), run = command, log = console.log } = options;
     const env = Object.freeze({ ...(options.env || process.env) });
-    const timezone = config.timezone || env.NPR_TIMEZONE || "UTC";
+    const provider = options.provider || injectedProvider || currentExecutionProvider(env);
+    const timezone = config.timezone || provider.timezone || "UTC";
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
     }).formatToParts(new Date());
@@ -118,12 +134,9 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     if (await realpath(cwd) !== await realpath((await execute("git", ["rev-parse", "--show-toplevel"])).trim())) {
       throw new Error("Run releases from the repository root.");
     }
-    const repository = this.services.repository || new Git(execute, { branch: config.branch || env.NPR_DEFAULT_BRANCH, remote: config.remote });
+    const repository = this.services.repository || new Git(execute, { branch: config.branch || provider.defaultBranch, remote: config.remote });
     await repository.initialize();
-    if (env.GITHUB_ACTIONS === "true" &&
-      (env.GITHUB_EVENT_NAME !== "workflow_dispatch" || env.GITHUB_REF !== `refs/heads/${repository.branch}`)) {
-      throw new Error("Actions publication requires manual dispatch from the default branch.");
-    }
+    provider.validateReleaseBranch(repository.branch);
     const npm = new NpmPackage(cwd, execute);
     const project = this.services.project || npm;
     const publisher = this.services.publisher || npm;
@@ -151,25 +164,26 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
         config.changelog ? new MarkdownChangelog(resolve(cwd, config.changelog.path || "CHANGELOG.md"), config.changelog) : null,
       verifier: this.services.verifier || new RegistryVisibility(publisher),
     });
-    const runtime = new ReleaseRuntime(config, cwd, run, log, env, services, state);
-    return Object.freeze({ kind: "initialized", runtime, state });
+    const runtime = new ReleaseRuntime(config, cwd, run, log, env, services, state, provider);
+    return Object.freeze({ kind: "initialized", runtime, state, release: runtime.description() });
   }
 }
 
 export class PrepareRelease implements Step<InitializedRelease, PreparedRelease> {
   readonly id = "prepare";
-  async run({ runtime, state }: InitializedRelease): Promise<PreparedRelease> {
+  async run(input: InitializedRelease, execution?: ExecutionContext): Promise<PreparedRelease> {
+    const { runtime, state } = input;
     const { project, repository, changelog } = runtime.services;
     let notes = "";
     const preparedTree = await repository.stage(async () => {
       await project.setVersion(state.version);
-      notes = await changelog?.release(state) || "";
-      await runtime.config.prepare?.(runtime.hook("prepare"));
+      notes = await changelog?.release(input.release) || "";
+      await runtime.config.prepare?.(runtime.hook("prepare", execution?.withRelease(input.release.withNotes(notes))));
       if ((await project.read()).version !== state.version) throw new Error("Preparation changed the selected version.");
       await project.lockfile(await project.read());
     });
     return Object.freeze({
-      kind: "prepared", runtime, notes,
+      kind: "prepared", runtime, notes, release: input.release.withNotes(notes),
       state: await runtime.report({ ...state, preparedTree }, "prepared"),
     });
   }
@@ -177,10 +191,10 @@ export class PrepareRelease implements Step<InitializedRelease, PreparedRelease>
 
 export class ValidateRelease implements Step<PreparedRelease, ValidatedRelease> {
   readonly id = "validate";
-  async run(input: PreparedRelease): Promise<ValidatedRelease> {
+  async run(input: PreparedRelease, execution?: ExecutionContext): Promise<ValidatedRelease> {
     const { runtime, state } = input;
     await runtime.report(state, "validating");
-    await runtime.services.validator.validate(runtime.hook("validate"));
+    await runtime.services.validator.validate(runtime.hook("validate", execution));
     await runtime.services.repository.unchanged(state.preparedTree);
     return Object.freeze({ ...input, kind: "validated", state: await runtime.report(state, "validated") });
   }
@@ -199,15 +213,16 @@ export class CommitRelease implements Step<ValidatedRelease, CommittedRelease> {
 
 export class BuildArtifact implements Step<CommittedRelease, BuiltRelease> {
   readonly id = "build";
-  async run({ runtime, state, notes }: CommittedRelease): Promise<BuiltRelease> {
+  async run(input: CommittedRelease, execution?: ExecutionContext): Promise<BuiltRelease> {
+    const { runtime, state, notes, release } = input;
     const { project, repository, publisher, validator, store } = runtime.services;
     const building = await runtime.report(state, "building");
-    const artifact = await project.pack(store.directory, state);
+    const artifact = await project.pack(store.directory, release);
     const updated = snapshot({ ...building, artifact });
     await store.save(updated);
     const archive = join(store.directory, artifact.filename);
     await project.consumer(archive, (consumer) =>
-      validator.artifact(Object.freeze({ ...runtime.hook("artifact"), archive, consumer })));
+      validator.artifact(Object.freeze({ ...runtime.hook("artifact", execution), archive, consumer })));
     await project.intact(store.directory, updated);
     await repository.clean();
     await repository.current(state.initialCommit);
@@ -216,7 +231,7 @@ export class BuildArtifact implements Step<CommittedRelease, BuiltRelease> {
     await repository.tag(state.version);
     await repository.bundle(join(store.directory, "release.bundle"), state.version);
     await writeFile(join(store.directory, "release-notes.md"), notes + "\n");
-    return Object.freeze({ kind: "built", runtime, state: await runtime.report(updated, "built") });
+    return Object.freeze({ kind: "built", runtime, release, state: await runtime.report(updated, "built") });
   }
 }
 
@@ -249,7 +264,7 @@ export class CreateHostedRelease implements Step<PushedRelease, HostedRelease> {
   async run(input: PushedRelease): Promise<HostedRelease> {
     const { runtime, state } = input;
     const { store, host } = runtime.services;
-    await host?.create(state, {
+    await host?.create(input.release, {
       archive: join(store.directory, state.artifact.filename), notes: join(store.directory, "release-notes.md"),
     });
     return Object.freeze({ ...input, kind: "hosted", state: await runtime.report(state, "hosted") });
@@ -258,16 +273,17 @@ export class CreateHostedRelease implements Step<PushedRelease, HostedRelease> {
 
 export class PrepareNextVersion implements Step<HostedRelease | PushedRelease, NextRelease> {
   readonly id = "next";
-  async run({ runtime, state }: HostedRelease | PushedRelease): Promise<NextRelease> {
+  async run(input: HostedRelease | PushedRelease, execution?: ExecutionContext): Promise<NextRelease> {
+    const { runtime, state, release } = input;
     const { project, repository, changelog, validator, store } = runtime.services;
     const nextTree = await repository.stage(async () => {
       await project.setVersion(state.nextVersion);
       await changelog?.next({ version: state.nextVersion, releasedVersion: state.version });
-      await runtime.config.next?.(runtime.hook("next"));
+      await runtime.config.next?.(runtime.hook("next", execution));
       if ((await project.read()).version !== state.nextVersion) throw new Error("Next hook changed the development version.");
       await project.lockfile(await project.read());
     });
-    await validator.validate(runtime.hook("next"));
+    await validator.validate(runtime.hook("next", execution));
     const nextCommit = await repository.commit(`Prepare next development iteration, ${state.nextVersion}`, nextTree);
     const updated = snapshot({ ...state, nextCommit });
     await store.save(updated);
@@ -276,19 +292,19 @@ export class PrepareNextVersion implements Step<HostedRelease | PushedRelease, N
     await repository.push(nextCommit);
     const next = await runtime.report(updated, "next");
     await project.intact(store.directory, next);
-    return Object.freeze({ kind: "next", runtime, state: next });
+    return Object.freeze({ kind: "next", runtime, release, state: next });
   }
 }
 
 export class VerifyRelease implements Step<NextRelease | HostedRelease | PushedRelease, ReleaseState> {
   readonly id = "verify";
   async run({ runtime }: NextRelease | HostedRelease | PushedRelease): Promise<ReleaseState> {
-    return verifyRetained(runtime.log, runtime.env, runtime.services);
+    return verifyRetained(runtime.log, runtime.provider, runtime.services);
   }
 }
 
 export async function verifyRetained(
-  log: Log, env: Environment, services: ReleaseServices,
+  log: Log, provider: ExecutionProvider, services: ReleaseServices,
 ): Promise<ReleaseState> {
   let state = await services.store.read();
   try {
@@ -306,10 +322,7 @@ export async function verifyRetained(
     await services.store.save(state);
     const message = verification === "verified" ? "verified" : "release could not be verified";
     log(`[npr] ${message}: ${state.name}@${state.version}`);
-    if (env.GITHUB_STEP_SUMMARY) {
-      await writeFile(env.GITHUB_STEP_SUMMARY,
-        `\n## npm Release Verification\n\n${state.name}@${state.version}: ${message}.\n`, { flag: "a" });
-    }
+    await provider.summary(`\n## npm Release Verification\n\n${state.name}@${state.version}: ${message}.\n`);
     return state;
   } catch (error) {
     await services.store.save({ ...state, verification: "failed", error: error instanceof Error ? error.message : String(error) });

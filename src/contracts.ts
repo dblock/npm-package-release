@@ -1,3 +1,6 @@
+import type { ExecutionContext, ExecutionProvider } from "./execution.js";
+import type { WorkflowObserver } from "./workflow.js";
+
 export type Environment = Readonly<Record<string, string | undefined>>;
 
 export interface CommandOptions {
@@ -49,6 +52,7 @@ export interface ReleaseState extends ReleaseIdentity {
   readonly failedStep?: string;
 }
 export interface HookContext {
+  readonly execution: ExecutionContext;
   readonly cwd: string;
   readonly version: string;
   readonly releasedVersion: string;
@@ -66,6 +70,7 @@ export interface ChangelogConfig {
   readonly path?: string;
 }
 export interface ReleaseConfig {
+  readonly observer?: WorkflowObserver;
   readonly changelog: ChangelogConfig | null;
   readonly branch?: string;
   readonly remote?: string;
@@ -79,6 +84,8 @@ export interface ReleaseConfig {
   readonly validateArtifact?: (context: ArtifactContext) => Promise<void>;
 }
 export interface ReleaseOptions {
+  readonly provider?: ExecutionProvider;
+  readonly observer?: WorkflowObserver;
   readonly cwd?: string;
   readonly version?: string;
   readonly artifacts?: string;
