@@ -1,16 +1,28 @@
 import {
   Workflow, InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact,
   PublishArtifact, release, ReleaseWorkflow,
+  LocalExecutionProvider,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
   ReleaseHost, ReleaseStore, ReleaseRepository, PackageProject, RegistryVerifier, ReleaseServices,
+  ExecutionContext, ExecutionProvider,
 } from "../../src/index.js";
 
 class InspectArtifact implements Step<BuiltRelease, BuiltRelease> {
   readonly id = "inspect";
-  async run(input: BuiltRelease): Promise<BuiltRelease> {
+  async run(input: BuiltRelease, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<BuiltRelease> {
     input.runtime.log(input.state.artifact.integrity);
+    execution?.release?.manifestVersion satisfies string | undefined;
+    provider?.context satisfies ExecutionProvider["context"] | undefined;
+    if (execution) {
+      // @ts-expect-error Execution history snapshots are immutable.
+      execution.steps.publish = { id: "publish", outcome: "success" };
+      // @ts-expect-error The current step is immutable.
+      execution.step.id = "changed";
+      // @ts-expect-error Execution snapshots do not expose credentials.
+      String(execution.env.GITHUB_TOKEN);
+    }
     // @ts-expect-error Release identity cannot be mutated by a step.
     input.state.version = "9.9.9";
     // @ts-expect-error Artifact checksums cannot be mutated by a step.
@@ -47,7 +59,7 @@ class Notes implements Changelog {
 class Versions implements VersionPolicy {
   select(version: string) { return { version, nextVersion: "1.0.0" }; }
 }
-new ReleaseWorkflow(config, { changelog: new Notes(), versions: new Versions() });
+new ReleaseWorkflow(config, { changelog: new Notes(), versions: new Versions() }, new LocalExecutionProvider({}));
 // @ts-expect-error Service implementations must satisfy the complete interface.
 new ReleaseWorkflow(config, { publisher: { async publish() {} } });
 

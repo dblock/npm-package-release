@@ -77,13 +77,16 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   await checkComposition(t, installedApi);
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact } from "npm-package-release";
-import type { Step, ReleaseOptions, PreparedRelease } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider } from "npm-package-release";
+import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext } from "npm-package-release";
 class Inspect implements Step<PreparedRelease, PreparedRelease> {
   readonly id = "inspect";
-  async run(input: PreparedRelease) { return input; }
+  async run(input: PreparedRelease, execution?: ExecutionContext) {
+    execution?.release?.manifestVersion satisfies string | undefined;
+    return input;
+  }
 }
-const flow = Workflow.start<ReleaseOptions>()
+const flow = Workflow.start<ReleaseOptions>({}, new LocalExecutionProvider({}))
   .then(new InitializeRelease({ changelog: null }))
   .then(new PrepareRelease()).then(new Inspect());
 export async function run(options: ReleaseOptions) { return flow.run(options); }

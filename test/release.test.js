@@ -231,6 +231,9 @@ test("private/workspace packages and mismatched lockfiles are rejected", async (
 
 test("GitHub summaries are isolated from the real environment", async (t) => {
   const fixture = await releaseFixture(t);
+  fixture.env.GITHUB_ACTIONS = "true";
+  fixture.env.GITHUB_EVENT_NAME = "workflow_dispatch";
+  fixture.env.GITHUB_REF = "refs/heads/master";
   await release(fixture.config, fixture);
   assert.match(await readFile(fixture.env.GITHUB_STEP_SUMMARY, "utf8"), /@npr-test\/example@0.1.0: verified/u);
 });

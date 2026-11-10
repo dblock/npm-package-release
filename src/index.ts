@@ -5,7 +5,13 @@ export { release, verify } from "./release.js";
 export { releaseChangelog, nextChangelog } from "./changelog.js";
 export type * from "./contracts.js";
 export { Workflow } from "./workflow.js";
-export type { Step, StepEvent, WorkflowObserver } from "./workflow.js";
+export type { Step, StepEvent, WorkflowObserver, WorkflowRunOptions } from "./workflow.js";
+export { Release } from "./release-description.js";
+export type { ReleaseDescription } from "./release-description.js";
+export { ExecutionContext, LocalExecutionProvider, GitHubExecutionProvider, currentExecutionProvider } from "./execution.js";
+export type {
+  ExecutionProvider, ExecutionAttributes, ExecutionStep, StepHistory, StepOutcome, ExecutionRun, WorkflowDescription,
+} from "./execution.js";
 export { Git } from "./git.js";
 export { NpmPackage } from "./package.js";
 export {

@@ -4,6 +4,8 @@ import { command } from "./command.js";
 import { Git } from "./git.js";
 import { NpmPackage } from "./package.js";
 import { Workflow } from "./workflow.js";
+import { currentExecutionProvider } from "./execution.js";
+import type { ExecutionContext, ExecutionProvider } from "./execution.js";
 import type { Step } from "./workflow.js";
 import type { ReleaseConfig, ReleaseOptions, ReleaseServices, ReleaseState, VerifyOptions } from "./contracts.js";
 import {
@@ -19,8 +21,8 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   readonly id = "npm-release";
   readonly workflow: Workflow<ReleaseOptions, ReleaseState>;
 
-  constructor(config: ReleaseConfig, services: Partial<ReleaseServices> = {}) {
-    this.workflow = Workflow.start<ReleaseOptions>(new ReleaseObserver())
+  constructor(private readonly config: ReleaseConfig, services: Partial<ReleaseServices> = {}, provider?: ExecutionProvider) {
+    this.workflow = Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider)
       .then(new InitializeRelease(config, services))
       .then(new PrepareRelease())
       .then(new ValidateRelease())
@@ -33,8 +35,8 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
       .then(new VerifyRelease());
   }
 
-  async run(options: ReleaseOptions = {}): Promise<ReleaseState> {
-    return this.workflow.run(options);
+  async run(options: ReleaseOptions = {}, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<ReleaseState> {
+    return this.workflow.run({ ...options, observer: options.observer || this.config?.observer }, execution, provider);
   }
 }
 
@@ -46,14 +48,14 @@ export async function release(config: ReleaseConfig | Step<ReleaseOptions, unkno
 }
 
 export async function verify({
-  cwd = process.cwd(), artifacts, run = command, log = console.log, env = process.env, services = {},
+  cwd = process.cwd(), artifacts, run = command, log = console.log, env = process.env, services = {}, provider = currentExecutionProvider(env),
 }: VerifyOptions = {}): Promise<ReleaseState> {
   const execute = scopedCommand(cwd, run, "UTC", "verify", env);
   const store = services.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, artifacts));
   const state = await store.read();
   const npm = new NpmPackage(cwd, execute);
   const publisher = services.publisher || npm;
-  return verifyRetained(log, env, {
+  return verifyRetained(log, provider, {
     repository: services.repository || new Git(execute, { branch: state.branch, remote: state.remote }),
     project: services.project || npm, publisher, store,
     verifier: services.verifier || new RegistryVisibility(publisher),

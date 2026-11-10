@@ -14,6 +14,16 @@ Keep `npm-package-release` as the repository/npm package name, `npr` as the exec
 
 The generic runner handles ordered execution, observer events, and stopping without retries. `ReleaseObserver` provides logging and failure persistence for release contexts. Built-in steps persist phase transitions and recovery snapshots through the injected store. Existing `release(config, options)` and configuration objects are adapters to the default workflow; the CLI also accepts composed workflows. See [Composable Workflows](docs/workflows.md) for contracts and examples.
 
+## Execution Boundaries
+
+Separate immutable domain `Release` data from execution snapshots and provider clients. Capture `manifestVersion` explicitly; retain legacy state/hook fields without claiming they identify publication history. Each lifecycle record carries release data; callbacks and step observers receive frozen execution metadata with current step, observed history, workflow description, and optional platform run information. Unknown steps remain absent; outcome and conclusion are distinct.
+
+`LocalExecutionProvider` and `GitHubExecutionProvider` implement a replaceable execution interface. Select GitHub only from the scoped Actions flag, with explicit provider injection taking precedence. Providers own platform metadata, default-branch/timezone inputs, execution-policy checks, and summaries; npm publication and hosted releases remain separate services. Contexts are data, not platform clients, environments, or raw event payloads. Step implementations may receive the provider separately from the snapshot.
+
+Each workflow invocation has independent history. Initialization failures still notify observers with no captured release. The built-in failure reporter and custom reporters coexist; a reporter failure cannot hide the original error or prevent other failure reporters from being attempted. Success notification failures are observable without rewriting registry verification outcomes or automatically retrying publication.
+
+This adopts the context/provider separation in ruby-gem-release 0.5.0, not its Rake process model or RubyGems credential exchange. Independently idempotent actions and prepublication artifact-upload checkpoints remain subsequent work; keep the current fail-closed guards until those contracts and their reconciliation tests are implemented. Opt-in semantic release analysis follows those foundations. See [Execution Providers and Contexts](docs/execution.md).
+
 ## Release Sequence
 
 The reusable GitHub Actions workflow and composite action invoke the same CLI/configuration as local callers, including composed class workflows. The Actions workflow owns the release environment, manual-default-branch guard, permissions, runner, dependency setup, concurrency, Git identity, and artifact upload. Composite callers supply those prerequisites. The reusable workflow does not reference a moving composite-action version.

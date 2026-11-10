@@ -5,6 +5,11 @@ import { releaseFixture } from "./release-fixture.js";
 
 export async function checkComposition(t, api) {
   const fixture = await releaseFixture(t);
+  const snapshots = [];
+  class PortableExecution extends api.LocalExecutionProvider {
+    name = "portable-consumer";
+  }
+  const provider = new PortableExecution({});
   const notesPath = join(fixture.cwd, "PROJECT_NOTES.md");
   class ProjectNotes {
     async release({ version }) {
@@ -42,9 +47,17 @@ export async function checkComposition(t, api) {
   }
   class ArtifactPolicy {
     id = "project-artifact-policy";
-    async run(context) {
+    async run(context, execution, client) {
       assert.equal(context.kind, "built");
       assert.equal(fixture.published.length, 0);
+      assert.equal(client, provider);
+      assert.equal(execution.provider, "portable-consumer");
+      assert.equal(execution.steps.build.outcome, "success");
+      assert.equal(execution.release.manifestVersion, "0.1.0");
+      assert.equal(execution.release.version, "0.2.0");
+      assert.equal(execution.release.notes, "Custom release 0.2.0");
+      assert.equal(context.release, execution.release);
+      snapshots.push(execution);
       assert.throws(() => { context.state.version = "9.9.9"; }, TypeError);
       assert.throws(() => { context.state.artifact.integrity = "changed"; }, TypeError);
       assert.ok((await readFile(join(fixture.artifacts, context.state.artifact.filename))).length);
@@ -84,10 +97,16 @@ export async function checkComposition(t, api) {
     .then(new api.CreateHostedRelease())
     .then(new api.PrepareNextVersion())
     .then(new api.VerifyRelease());
-  const result = await api.release(workflow, { ...fixture, version: "0.2.0" });
+  const result = await api.release(workflow, {
+    ...fixture, version: "0.2.0", provider,
+    observer: { async succeeded({ execution }) { snapshots.push(execution); } },
+  });
   assert.equal(result.verification, "verified");
   assert.equal(result.nextVersion, "0.3.0");
   assert.equal(fixture.published.length, 1);
+  assert.equal(snapshots.length, 2);
+  assert.equal(snapshots[0].steps.publish, undefined);
+  assert.equal(snapshots[1].steps.publish.outcome, "success");
   assert.equal(fixture.events.filter((event) => event === "project publication").length, 1);
   assert.ok(fixture.events.indexOf("project registry view") > fixture.events.indexOf("next"));
   assert.equal(JSON.parse(await readFile(join(fixture.cwd, "package.json"), "utf8")).version, "0.3.0");
@@ -95,7 +114,7 @@ export async function checkComposition(t, api) {
   assert.ok(fixture.events.indexOf("project artifact check") < fixture.events.indexOf("npm publish"));
   assert.ok(fixture.events.indexOf("npm publish") < fixture.events.indexOf("project hosting"));
   assert.ok(fixture.events.indexOf("project hosting") < fixture.events.indexOf("next"));
-  const verified = await api.verify({ ...fixture, services: { publisher } });
+  const verified = await api.verify({ ...fixture, services: { publisher }, provider });
   assert.equal(verified.version, "0.2.0");
   assert.equal(verified.verification, "verified");
 }

@@ -40,11 +40,11 @@ export default new ReleaseWorkflow({
 });
 ```
 
-The default validation runs `npm test` and `npm run lint` before publication and for the next development iteration. [Composable Workflows](docs/workflows.md) explains custom classes, typed step composition, and service injection; [Detailed Usage](docs/usage.md#configuration) documents compatible configuration objects, hooks, and defaults.
+The default validation runs `npm test` and `npm run lint` before publication and for the next development iteration. [Composable Workflows](docs/workflows.md) explains custom classes and service injection; [Execution Providers and Contexts](docs/execution.md) covers platform metadata and notifications; [Detailed Usage](docs/usage.md#configuration) documents compatible configuration objects, hooks, and defaults.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), and [Composable Workflows](docs/workflows.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Composable Workflows](docs/workflows.md), and [Execution Providers and Contexts](docs/execution.md).
 
 ## License
 
