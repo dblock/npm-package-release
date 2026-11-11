@@ -30,3 +30,14 @@ export type {
   PublishedRelease, PushedRelease, HostedRelease, NextRelease,
 } from "./steps.js";
 export { ReleaseWorkflow } from "./release.js";
+export {
+  SemanticRelease, SemanticDecision, GitHistory, ConventionalCommits, SemanticVersionSelector, GeneratedReleaseNotes,
+} from "./semantic.js";
+export type {
+  ReleaseType, SemanticCommit, SemanticTag, SemanticHistoryData, SemanticHistory, CommitAnalyzer, SemanticSelection,
+  SemanticVersionPolicy, SemanticNotes, SemanticServices, SemanticDecisionData, SemanticPlan, ParsedCommit, ReleaseRule,
+} from "./semantic.js";
+export {
+  SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, GeneratedChangelog, ValidateSemanticDecision,
+} from "./semantic-workflow.js";
+export type { SemanticReleaseConfig, AnalyzedReleaseOptions } from "./semantic-workflow.js";

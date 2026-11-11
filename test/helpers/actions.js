@@ -9,6 +9,8 @@ import { parse } from "yaml";
 
 export async function checkActions(t, archive) {
   for (const file of [".github/workflows/release.yml", "action.yml"]) {
+    const semantic = file !== "action.yml";
+    const releasedVersion = semantic ? "1.0.0" : "0.2.0";
     const source = await readFile(fileURLToPath(new URL(`../../${file}`, import.meta.url)), "utf8");
     const definition = parse(source);
     const steps = file === "action.yml" ? definition.runs.steps : definition.jobs.release.steps;
@@ -30,9 +32,11 @@ export async function checkActions(t, archive) {
       cwd: fixture.cwd,
     });
     await writeFile(join(fixture.cwd, "npr.config.js"),
-      'export default { changelog: { format: "intridea" }, verification: { attempts: 2, delay: 0 } };\n');
+      semantic ?
+        'import { SemanticReleaseWorkflow } from "npm-package-release"; export default new SemanticReleaseWorkflow({ verification: { attempts: 2, delay: 0 } });\n' :
+        'export default { changelog: { format: "intridea" }, verification: { attempts: 2, delay: 0 } };\n');
     await fixture.git("add", ".");
-    await fixture.git("commit", "-m", "Install release tooling");
+    await fixture.git("commit", "-m", "feat: install release tooling");
     await fixture.git("push", "origin", "master");
     const publication = join(fixture.directory, "publication.json");
     const hosted = join(fixture.directory, "hosted.json");
@@ -90,7 +94,7 @@ if (args[0] === "api") {
       ...process.env,
       PATH: bin + delimiter + process.env.PATH,
       npm_config_script_shell: shell,
-      NPR_CONFIG: "npr.config.js", NPR_VERSION: "0.2.0", NPR_TIMEZONE: "America/New_York",
+      NPR_CONFIG: "npr.config.js", NPR_VERSION: semantic ? "" : releasedVersion, NPR_TIMEZONE: "America/New_York",
       NPR_ARTIFACTS: artifacts, RUNNER_TEMP: fixture.directory, NPR_DEFAULT_BRANCH: "master",
       GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REF: "refs/heads/master",
       GITHUB_STEP_SUMMARY: join(fixture.directory, "summary.md"), GH_TOKEN: "isolated-test-only",
@@ -100,10 +104,14 @@ if (args[0] === "api") {
     const durable = join(fixture.directory, "uploaded-checkpoint");
     await cp(artifacts, durable, { recursive: true });
     const checkpoint = await readFile(join(durable, "checkpoint.json"), "utf8");
+    if (semantic) {
+      assert.equal(JSON.parse(checkpoint).semantic.decision.version, releasedVersion);
+      assert.equal(JSON.parse(checkpoint).semantic.nextDevelopment, false);
+    }
     const output = await command("bash", ["-euo", "pipefail", "-c", steps[completion].run], { cwd: fixture.cwd, env });
-    assert.match(output, /\[npr\] verified: @npr-test\/example@0.2.0/u);
-    assert.equal(JSON.parse(await readFile(hosted, "utf8")).tag_name, "v0.2.0");
-    assert.equal(JSON.parse(await readFile(join(fixture.cwd, "package.json"), "utf8")).version, "0.2.1");
+    assert.ok(output.includes(`[npr] verified: @npr-test/example@${releasedVersion}`));
+    assert.equal(JSON.parse(await readFile(hosted, "utf8")).tag_name, `v${releasedVersion}`);
+    assert.equal(JSON.parse(await readFile(join(fixture.cwd, "package.json"), "utf8")).version, semantic ? releasedVersion : "0.2.1");
     const before = await readFile(publication, "utf8");
     await command("bash", ["-euo", "pipefail", "-c",
       'npm exec --offline -- npr verify --artifacts "$NPR_ARTIFACTS"',

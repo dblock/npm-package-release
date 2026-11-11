@@ -19,6 +19,8 @@ npm exec --offline -- npr verify --artifacts /path/to/retained-artifacts
 
 `release` publishes and pushes: obtain authorization and configure authentication first. It releases the checked-in version unless `--version` selects a numeric version, then prepares the next patch version. `--config` defaults to `npr.config.js`; use an ESM file (`.mjs` when the consumer declares CommonJS). `--artifacts` overrides the default Git-metadata directory. Empty version/artifact values are treated as unset. Put artifacts outside the source tree or in an ignored directory.
 
+Those version/next-development defaults describe `ReleaseWorkflow`. Export `new SemanticReleaseWorkflow()` to opt into Conventional Commits versioning and generated notes instead; it leaves next-development preparation disabled unless configured. See [Semantic Releases](semantic.md) for policies and replacement classes. The same CLI commands and Actions inputs apply.
+
 `verify` reads `release.json` and its archive, checks the remote lightweight release tag and explicit registry version, and never publishes, commits, pushes, or creates hosted releases. Supply the complete retained directory; do not substitute a rebuilt archive.
 
 `prepare` stops after validation and immutable checkpoint creation, without publishing or pushing. Preserve the entire directory durably before invoking `complete`, which restores and reconciles that explicit checkpoint. Complete rejects `--version`: the checkpoint already captures the release identity. Both accept `--config` and `--artifacts`; see [Checkpoints and Reconciliation](checkpoints.md).

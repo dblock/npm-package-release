@@ -252,7 +252,8 @@ export class CheckpointRelease implements Step<BuiltRelease, BuiltRelease> {
 
 export class RestoreRelease implements Step<ReleaseOptions, BuiltRelease> {
   readonly id = "restore";
-  constructor(readonly config: ReleaseConfig, readonly overrides: Partial<ReleaseServices> = {}) {}
+  constructor(readonly config: ReleaseConfig, readonly overrides: Partial<ReleaseServices> = {},
+    readonly semantic?: { readonly nextDevelopment: boolean }) {}
 
   async run(options: ReleaseOptions, execution?: ExecutionContext, injectedProvider?: ExecutionProvider): Promise<BuiltRelease> {
     const { cwd = process.cwd(), run = command, log = console.log } = options;
@@ -265,6 +266,10 @@ export class RestoreRelease implements Step<ReleaseOptions, BuiltRelease> {
     }
     const store = this.overrides.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, options.artifacts));
     const checkpoint = await readCheckpoint(store.directory);
+    if (Boolean(checkpoint.semantic) !== Boolean(this.semantic) ||
+      (this.semantic && checkpoint.semantic?.nextDevelopment !== this.semantic.nextDevelopment)) {
+      throw new Error("Checkpoint workflow policy differs; use the original release workflow.");
+    }
     const { source, artifact } = checkpoint;
     const release = new Release(checkpoint.release);
     if ((options.version && options.version !== release.version) ||
@@ -282,6 +287,7 @@ export class RestoreRelease implements Step<ReleaseOptions, BuiltRelease> {
       name: release.name, version: release.version, previousVersion: release.manifestVersion,
       nextVersion: release.nextVersion!, date: release.date, timezone: checkpoint.timezone,
       ...source, artifact, verificationOptions: verificationOptions(checkpoint.verificationOptions), phase: "built",
+      ...(checkpoint.semantic ? { semantic: checkpoint.semantic } : {}),
     });
     await project.intact(store.directory, state);
     await repository.restore(source, join(store.directory, "release.bundle"), release.version);

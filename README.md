@@ -42,9 +42,11 @@ export default new ReleaseWorkflow({
 
 The default validation runs `npm test` and `npm run lint` before publication and for the next development iteration. [Composable Workflows](docs/workflows.md) explains custom classes and service injection; [Execution Providers and Contexts](docs/execution.md) covers platform metadata and notifications; [Detailed Usage](docs/usage.md#configuration) documents compatible configuration objects, hooks, and defaults.
 
+For opt-in Conventional Commits version selection and generated notes, export `new SemanticReleaseWorkflow()` instead. See [Semantic Releases](docs/semantic.md) for first-release, breaking-change, and next-development policies.
+
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), and [Checkpoints and Reconciliation](docs/checkpoints.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Checkpoints and Reconciliation](docs/checkpoints.md), and [Semantic Releases](docs/semantic.md).
 
 ## License
 

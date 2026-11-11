@@ -22,7 +22,7 @@ Separate immutable domain `Release` data from execution snapshots and provider c
 
 Each workflow invocation has independent history. Initialization failures still notify observers with no captured release. The built-in failure reporter and custom reporters coexist; a reporter failure cannot hide the original error or prevent other failure reporters from being attempted. Success notification failures are observable without rewriting registry verification outcomes or automatically retrying publication.
 
-This adopts the context/provider separation in ruby-gem-release 0.5.0, not its Rake process model or RubyGems credential exchange. Output reconciliation and immutable prepublication checkpoints build on those boundaries; opt-in semantic release analysis remains future work. See [Execution Providers and Contexts](docs/execution.md).
+This adopts the context/provider separation in ruby-gem-release 0.5.0, not its Rake process model or RubyGems credential exchange. Output reconciliation, immutable prepublication checkpoints, and opt-in semantic release analysis build on those boundaries. See [Execution Providers and Contexts](docs/execution.md).
 
 ## Release Sequence
 
@@ -39,6 +39,12 @@ After publication, verify archive integrity, atomically push the release commit 
 ## Changelog Boundaries
 
 Parse Markdown to identify top-level ATX headings, list placeholders, actual release notes, and comparison definitions. Exclude headings, HTML/comments, definitions, and thematic breaks from meaningful notes; do not borrow historical notes. Code and described images count as actual content. Update original source slices rather than rendering an AST; preserve unrelated Markdown, Unicode offsets, and CRLF. Intridea requires exactly one contribution placeholder. Keep a Changelog supports standard Unreleased comparison links; reject unsupported or duplicate definitions.
+
+## Semantic Releases
+
+`SemanticReleaseWorkflow` is opt-in; the numeric/manual-changelog workflow is unchanged. Replaceable `SemanticHistory`, `CommitAnalyzer`, `SemanticVersionPolicy`, and `SemanticNotes` interfaces separate Git discovery, Conventional Commits classification, selection, and notes. Capture full history from the highest numeric tag reachable from the source commit, reject shallow checkouts, and bind an immutable decision to that source, version, original override, and notes before committing. No eligible change fails before project edits; an explicit increasing version can override classification.
+
+Default the first semantic release to `1.0.0`, breaking changes to a major increment even in `0.x`, and next-development preparation to disabled. Generated notes replace manual changelog maintenance without modifying a Markdown file. Checkpoints retain the decision and next-development policy; completion must not rediscover history or reanalyze commits, and rejects mismatched workflow policies. `nextVersion` remains planned data even when no next commit is made. See [Semantic Releases](docs/semantic.md).
 
 ## Verification and Recovery
 
