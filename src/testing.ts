@@ -85,10 +85,6 @@ export class TestPublisher implements PackagePublisher {
     return metadata;
   }
 
-  async available(name: string, version: string): Promise<void> {
-    if (await this.view(name, version)) throw new Error(`Version is already published: ${name}@${version}`);
-  }
-
   async publish(archive: string): Promise<void> {
     const bytes = await readFile(archive);
     const { name, version } = await archiveMetadata(archive, bytes);

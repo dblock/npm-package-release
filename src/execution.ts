@@ -1,4 +1,6 @@
-import { writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import process from "node:process";
 import type { Environment } from "./contracts.js";
 import { Release } from "./release-description.js";
@@ -80,6 +82,7 @@ export interface ExecutionProvider {
   context(attributes: ExecutionAttributes): ExecutionContext;
   validateReleaseBranch(branch: string): void;
   summary(message: string): Promise<void>;
+  capture?(inputs: Environment): Promise<Environment>;
 }
 
 export class LocalExecutionProvider implements ExecutionProvider {
@@ -121,6 +124,24 @@ export class GitHubExecutionProvider extends LocalExecutionProvider {
   }
 
   protected override observedSteps(): StepHistory { return this.#steps; }
+
+  async capture(inputs: Environment): Promise<Environment> {
+    const destination = this.value("GITHUB_ENV");
+    if (!destination) return inputs;
+    let state = this.value("NPR_STATE_FILE");
+    if (!state) {
+      state = join(await mkdtemp(join(this.value("RUNNER_TEMP") || tmpdir(), "npr-invocation-")), "state.json");
+      await writeFile(state, "{}", { mode: 0o600 });
+    }
+    const captured = Object.freeze({ ...inputs, NPR_STATE_FILE: state });
+    const fields = ["NPR_SOURCE_COMMIT", "NPR_MANIFEST_VERSION", "NPR_RELEASE_DATE", "SOURCE_DATE_EPOCH", "NPR_STATE_FILE"];
+    if (Object.entries(captured).some(([name, value]) =>
+      !fields.includes(name) || typeof value !== "string" || /[\r\n]/u.test(value))) {
+      throw new Error("Invalid release invocation exports.");
+    }
+    await appendFile(destination, Object.entries(captured).map(([name, value]) => `${name}=${value}\n`).join(""));
+    return captured;
+  }
 
   protected override runMetadata(): ExecutionRun {
     const repository = this.value("GITHUB_REPOSITORY");

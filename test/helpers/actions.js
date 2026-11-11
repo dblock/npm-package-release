@@ -25,14 +25,14 @@ export async function checkActions(t, archive, files = [".github/workflows/relea
     const steps = file === "action.yml" ? definition.runs.steps : releaseDefinition.jobs.release.steps;
     const executable = "npm exec --offline -- npr";
     const preparation = steps.findIndex((step) => step.run?.startsWith(`${executable} prepare `));
-    const completion = steps.findIndex((step) => step.run?.startsWith(`${executable} complete `));
-    assert.ok(preparation >= 0 && completion === preparation + 2, `Missing checkpoint handoff in ${file}`);
+    const publicationStep = steps.findIndex((step) => step.run?.startsWith(`${executable} release `));
+    assert.ok(preparation >= 0 && publicationStep === preparation + 2, `Missing prepublication upload in ${file}`);
     const upload = steps[preparation + 1];
     assert.match(upload.uses, /^actions\/upload-artifact@/u);
     assert.equal(upload.with["if-no-files-found"], "error");
     assert.equal(upload.with["include-hidden-files"], true);
     assert.equal(upload.if, undefined);
-    assert.equal(steps[completion].if, undefined);
+    assert.equal(steps[publicationStep].if, undefined);
     const fixture = selfRelease ?
       await selfReleaseFixture(t, fileURLToPath(new URL("../../", import.meta.url)), true) :
       await releaseFixture(t);
@@ -105,7 +105,7 @@ if (args[0] === "api") {
 `, { mode: 0o755 });
     const artifacts = join(fixture.directory, "npr-release");
     const env = {
-      ...process.env,
+      ...fixture.env,
       PATH: bin + delimiter + process.env.PATH,
       npm_config_script_shell: shell,
       NPR_CONFIG: "npr.config.js", NPR_VERSION: semantic ? "" : releasedVersion, NPR_TIMEZONE: "America/New_York",
@@ -127,14 +127,25 @@ if (args[0] === "api") {
     }
     await command("bash", ["-euo", "pipefail", "-c", steps[preparation].run], { cwd: fixture.cwd, env });
     await assert.rejects(readFile(publication), { code: "ENOENT" });
-    const durable = join(fixture.directory, "uploaded-checkpoint");
+    const durable = join(fixture.directory, "uploaded-artifacts");
     await cp(artifacts, durable, { recursive: true });
-    const checkpoint = await readFile(join(durable, "checkpoint.json"), "utf8");
-    if (semantic) {
-      assert.equal(JSON.parse(checkpoint).semantic.decision.version, releasedVersion);
-      assert.equal(JSON.parse(checkpoint).semantic.nextDevelopment, false);
+    const prepared = JSON.parse(await readFile(join(durable, "release.json"), "utf8"));
+    const bytes = await readFile(join(durable, prepared.artifact.filename));
+    await assert.rejects(readFile(join(durable, "checkpoint.json")), { code: "ENOENT" });
+    for (const line of (await readFile(env.GITHUB_ENV, "utf8")).trim().split("\n")) {
+      const equals = line.indexOf("=");
+      env[line.slice(0, equals)] = line.slice(equals + 1);
     }
-    const output = await command("bash", ["-euo", "pipefail", "-c", steps[completion].run], { cwd: fixture.cwd, env });
+    assert.equal(env.NPR_SOURCE_COMMIT, prepared.initialCommit);
+    assert.equal(env.NPR_MANIFEST_VERSION, prepared.previousVersion);
+    assert.equal(env.NPR_RELEASE_DATE, prepared.date);
+    assert.match(env.SOURCE_DATE_EPOCH, /^\d+$/u);
+    if (semantic) {
+      assert.equal(prepared.semantic.decision.version, releasedVersion);
+      assert.equal(prepared.semantic.nextDevelopment, false);
+      assert.equal(JSON.parse(await readFile(env.NPR_STATE_FILE, "utf8")).analysis.version, releasedVersion);
+    }
+    const output = await command("bash", ["-euo", "pipefail", "-c", steps[publicationStep].run], { cwd: fixture.cwd, env });
     const packageName = selfRelease ? "npm-package-release" : "@npr-test/example";
     assert.ok(output.includes(`[npr] verified: ${packageName}@${releasedVersion}`));
     assert.equal(JSON.parse(await readFile(hosted, "utf8")).tag_name, `v${releasedVersion}`);
@@ -145,8 +156,7 @@ if (args[0] === "api") {
     ], { cwd: fixture.cwd, env });
     assert.equal(await readFile(publication, "utf8"), before);
     assert.equal(JSON.parse(await readFile(join(artifacts, "release.json"), "utf8")).verification, "verified");
-    await command("bash", ["-euo", "pipefail", "-c", steps[completion].run], { cwd: fixture.cwd, env });
-    assert.equal(await readFile(publication, "utf8"), before);
-    assert.equal(await readFile(join(durable, "checkpoint.json"), "utf8"), checkpoint);
+    assert.deepEqual(await readFile(join(artifacts, prepared.artifact.filename)), bytes);
+    assert.deepEqual(await readFile(join(durable, prepared.artifact.filename)), bytes);
   }
 }

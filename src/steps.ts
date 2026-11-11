@@ -9,7 +9,6 @@ import { Release } from "./release-description.js";
 import { lifecycleFor } from "./lifecycle.js";
 import type { LifecycleInvocation, LifecycleFailure } from "./lifecycle.js";
 import { currentExecutionProvider } from "./execution.js";
-import { readCheckpoint, writeCheckpoint } from "./checkpoint.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
 import {
   DirectoryReleaseStore, GitHubReleaseHost, HookValidator, KeepAChangelog, NumericPatchVersions,
@@ -154,39 +153,55 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     const config = this.config;
     validateConfig(config);
     const { cwd = process.cwd(), run = command, log = console.log } = options;
-    const env = Object.freeze({ ...(options.env || process.env) });
+    let env = Object.freeze({ ...(options.env || process.env) });
     const provider = options.provider || injectedProvider || config.provider || currentExecutionProvider(env);
     const timezone = config.timezone || provider.timezone || "UTC";
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
     }).formatToParts(new Date());
-    const date = ["year", "month", "day"].map((type) => parts.find((part) => part.type === type)!.value).join("-");
+    const date = env.NPR_RELEASE_DATE ||
+      ["year", "month", "day"].map((type) => parts.find((part) => part.type === type)!.value).join("-");
+    if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Invalid release date.");
     const verification = verificationOptions(config.verifier?.options);
-    const execute = scopedCommand(cwd, run, timezone, "release", env);
+    let execute = scopedCommand(cwd, run, timezone, "release", env);
     if (await realpath(cwd) !== await realpath((await execute("git", ["rev-parse", "--show-toplevel"])).trim())) {
       throw new Error("Run releases from the repository root.");
     }
     const repository = config.repository || new Git(execute, { branch: config.branch || provider.defaultBranch, remote: config.remote });
-    await repository.initialize();
+    await repository.initialize(env.NPR_SOURCE_COMMIT);
     provider.validateReleaseBranch(repository.branch);
-    const npm = new NpmPackage(cwd, execute);
-    const project = config.project || npm;
-    const publisher = config.publisher || npm;
+    const project = config.project || new NpmPackage(cwd, execute);
     const manifest = await project.read();
     const versions = config.versions || new NumericPatchVersions();
     const { version, nextVersion } = versions.select(manifest.version, options.version);
+    await repository.current(repository.initialCommit, version);
+    const epoch = env.SOURCE_DATE_EPOCH ||
+      (await execute("git", ["show", "-s", "--format=%ct", repository.initialCommit])).trim();
+    if (!/^\d+$/u.test(epoch)) throw new Error("Invalid source timestamp.");
+    const previousVersion = numericVersion(env.NPR_MANIFEST_VERSION || manifest.version);
+    const inputs = {
+      NPR_SOURCE_COMMIT: repository.initialCommit, NPR_MANIFEST_VERSION: previousVersion,
+      NPR_RELEASE_DATE: date, SOURCE_DATE_EPOCH: epoch,
+    };
+    const captured = await provider.capture?.(inputs);
+    env = Object.freeze({ ...env, ...inputs, ...captured });
+    execute = scopedCommand(cwd, run, timezone, "release", env);
+    const npm = new NpmPackage(cwd, execute);
+    const publisher = config.publisher || npm;
     const host = releaseHost(config, execute, manifest);
-    await repository.missingTag(version);
-    await publisher.available(manifest.name, version);
+    const published = await publisher.view(manifest.name, version);
+    if (published && (!published.dist?.integrity || !published.dist.shasum)) {
+      throw new Error("Published archive integrity is unavailable.");
+    }
     const store = config.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, options.artifacts));
     const state = snapshot({
-      name: manifest.name, version, previousVersion: manifest.version, nextVersion,
+      name: manifest.name, version, previousVersion, nextVersion,
       date, timezone, branch: repository.branch, remote: repository.remote, initialCommit: repository.initialCommit,
       verificationOptions: verification, phase: "started",
     });
     await store.initialize(state);
     const services = releaseServices(config, {
-      repository, project, publisher, versions, store, host,
+      repository, project: config.project || npm, publisher, versions, store, host,
     });
     const runtime = new ReleaseRuntime(config, cwd, run, log, env, services, state, provider, lifecycleFor(options));
     return Object.freeze({ kind: "initialized", runtime, state, release: runtime.description() });
@@ -243,7 +258,7 @@ export class BuildArtifact implements Step<CommittedRelease, BuiltRelease> {
   readonly id = "build";
   async run(input: CommittedRelease, execution?: ExecutionContext): Promise<BuiltRelease> {
     const { runtime, state, notes, release } = input;
-    const { project, repository, publisher, validator, store } = runtime.services;
+    const { project, repository, validator, store } = runtime.services;
     const building = await runtime.report(state, "building");
     const artifact = await project.pack(store.directory, release);
     const updated = snapshot({ ...building, artifact });
@@ -253,80 +268,11 @@ export class BuildArtifact implements Step<CommittedRelease, BuiltRelease> {
       validator.artifact(Object.freeze({ ...runtime.hook("artifact", execution), archive, consumer })));
     await project.intact(store.directory, updated);
     await repository.clean();
-    await repository.current(state.initialCommit);
-    await repository.missingTag(state.version);
-    await publisher.available(state.name, state.version);
+    await repository.current(state.initialCommit, state.version);
     await repository.tag(state.version);
     await repository.bundle(join(store.directory, "release.bundle"), state.version);
     await writeFile(join(store.directory, "release-notes.md"), notes + "\n");
     return Object.freeze({ kind: "built", runtime, release, state: await runtime.report(updated, "built") });
-  }
-}
-
-export class CheckpointRelease implements Step<BuiltRelease, BuiltRelease> {
-  readonly id = "checkpoint";
-  async run(input: BuiltRelease): Promise<BuiltRelease> {
-    await input.runtime.services.project.intact(input.runtime.services.store.directory, input.state);
-    await writeCheckpoint(input);
-    input.runtime.log(`[npr] checkpoint: ${input.state.name}@${input.state.version}`);
-    return input;
-  }
-}
-
-export class RestoreRelease implements Step<ReleaseOptions, BuiltRelease> {
-  readonly id = "restore";
-  constructor(readonly config: ReleaseConfig = {},
-    readonly semantic?: { readonly nextDevelopment: boolean }) {}
-
-  async run(options: ReleaseOptions, execution?: ExecutionContext, injectedProvider?: ExecutionProvider): Promise<BuiltRelease> {
-    const { cwd = process.cwd(), run = command, log = console.log } = options;
-    const env = Object.freeze({ ...(options.env || process.env) });
-    const provider = options.provider || injectedProvider || this.config.provider || currentExecutionProvider(env);
-    validateConfig(this.config);
-    const execute = scopedCommand(cwd, run, this.config.timezone || provider.timezone || "UTC", "restore", env);
-    if (await realpath(cwd) !== await realpath((await execute("git", ["rev-parse", "--show-toplevel"])).trim())) {
-      throw new Error("Run releases from the repository root.");
-    }
-    const store = this.config.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, options.artifacts));
-    const checkpoint = await readCheckpoint(store.directory);
-    if (Boolean(checkpoint.semantic) !== Boolean(this.semantic) ||
-      (this.semantic && checkpoint.semantic?.nextDevelopment !== this.semantic.nextDevelopment)) {
-      throw new Error("Checkpoint workflow policy differs; use the original release workflow.");
-    }
-    const { source, artifact } = checkpoint;
-    const release = new Release(checkpoint.release);
-    if ((options.version && options.version !== release.version) ||
-      (this.config.branch && this.config.branch !== source.branch) ||
-      (this.config.remote && this.config.remote !== source.remote) ||
-      (this.config.timezone && this.config.timezone !== checkpoint.timezone)) {
-      throw new Error("Configuration differs from release checkpoint.");
-    }
-    const scoped = scopedCommand(cwd, run, checkpoint.timezone, "release", env);
-    const repository = this.config.repository || new Git(scoped, { branch: source.branch, remote: source.remote });
-    provider.validateReleaseBranch(source.branch);
-    const npm = new NpmPackage(cwd, scoped);
-    const project = this.config.project || npm;
-    const state = snapshot({
-      name: release.name, version: release.version, previousVersion: release.manifestVersion,
-      nextVersion: release.nextVersion!, date: release.date, timezone: checkpoint.timezone,
-      ...source, artifact, verificationOptions: verificationOptions(checkpoint.verificationOptions), phase: "built",
-      ...(checkpoint.semantic ? { semantic: checkpoint.semantic } : {}),
-    });
-    await project.intact(store.directory, state);
-    await repository.restore(source, join(store.directory, "release.bundle"), release.version);
-    const manifest = await project.read();
-    if (manifest.name !== release.name || ![release.version, release.nextVersion].includes(manifest.version)) {
-      throw new Error("Checkout package differs from release checkpoint.");
-    }
-    const publisher = this.config.publisher || npm;
-    const services = releaseServices(this.config, {
-      repository, project, publisher, store,
-      host: releaseHost(this.config, scoped, manifest),
-      versions: this.config.versions || new NumericPatchVersions(),
-    });
-    const runtime = new ReleaseRuntime(this.config, cwd, run, log, env, services, state, provider, lifecycleFor(options));
-    await store.save(state);
-    return Object.freeze({ kind: "built", runtime, state, release });
   }
 }
 

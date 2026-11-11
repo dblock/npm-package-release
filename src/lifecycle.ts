@@ -20,8 +20,6 @@ export interface LifecycleStages {
   readonly validate: { before: PreparedRelease; after: ValidatedRelease };
   readonly commit: { before: ValidatedRelease; after: CommittedRelease };
   readonly build: { before: CommittedRelease; after: BuiltRelease };
-  readonly checkpoint: { before: BuiltRelease; after: BuiltRelease };
-  readonly restore: { before: ReleaseOptions; after: BuiltRelease };
   readonly publish: { before: BuiltRelease; after: PublishedRelease };
   readonly push: { before: PublishedRelease; after: PushedRelease };
   readonly host: { before: PushedRelease; after: HostedRelease };
@@ -51,8 +49,8 @@ export interface LifecycleHook<S extends LifecycleStage, T extends HookTiming> {
 }
 
 const stages: readonly LifecycleStage[] = [
-  "analyze", "initialize", "prepare", "semantic-decision", "validate", "commit", "build", "checkpoint",
-  "restore", "publish", "push", "host", "next", "verify", "success", "failure",
+  "analyze", "initialize", "prepare", "semantic-decision", "validate", "commit", "build",
+  "publish", "push", "host", "next", "verify", "success", "failure",
 ];
 function isStage(stageId: string): stageId is LifecycleStage {
   return stages.some((stage) => stage === stageId);

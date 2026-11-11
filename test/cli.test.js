@@ -56,5 +56,5 @@ export default Workflow.start().then(new ProjectRelease());
     cwd, encoding: "utf8",
   });
   assert.equal(unsupported.status, 1);
-  assert.match(unsupported.stderr, /implementing prepare and complete/u);
+  assert.match(unsupported.stderr, /implementing prepare and run/u);
 });

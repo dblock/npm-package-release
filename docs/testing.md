@@ -79,6 +79,6 @@ export function rejectedPublisher(directory) {
 }
 ```
 
-`TestReleaseHost(directory, { failure })` supports the same explicit failure. Existing identical outputs remain reusable even with failure configured. A new release still refuses an already-published version; checkpoint completion reconciles matching outputs.
+`TestReleaseHost(directory, { failure })` supports the same explicit failure. Existing identical outputs remain reusable even with failure configured. Release operations reconcile matching outputs and reject conflicting archives or refs.
 
 These are explicit service replacements, not a sandbox: arbitrary callbacks or explicit command/environment overrides can still contact external systems. Keep all fixture remotes local, replace every publication/hosting boundary through your builder, and never dispatch a publishing Actions workflow from these tests.

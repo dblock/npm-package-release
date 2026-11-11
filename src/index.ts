@@ -1,10 +1,7 @@
 import metadata from "../package.json" with { type: "json" };
 
 export const version = metadata.version;
-export { release, verify, prepare, complete } from "./release.js";
-export type { CheckpointWorkflow } from "./release.js";
-export { readCheckpoint } from "./checkpoint.js";
-export type { ReleaseCheckpoint } from "./checkpoint.js";
+export { release, verify, prepare } from "./release.js";
 export { releaseChangelog, nextChangelog } from "./changelog.js";
 export type { ChangelogTemplate } from "./changelog.js";
 export { MarkdownSection } from "./markdown.js";
@@ -30,7 +27,6 @@ export {
 export {
   InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, PublishArtifact,
   PushRelease, CreateHostedRelease, PrepareNextVersion, VerifyRelease, ReleaseRuntime, ReleaseObserver,
-  CheckpointRelease, RestoreRelease,
 } from "./steps.js";
 export type {
   ReleaseContext, InitializedRelease, PreparedRelease, ValidatedRelease, CommittedRelease, BuiltRelease,

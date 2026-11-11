@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { cp, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, URL } from "node:url";
 import { ReleaseTestProject, TestPublisher } from "npm-package-release/testing";
+import { PublishArtifact, PushRelease, CreateHostedRelease, PrepareNextVersion } from "npm-package-release";
 import { createReleaseWorkflow } from "./workflow.js";
 
 async function fixture(t, newline) {
@@ -24,14 +25,12 @@ async function fixture(t, newline) {
 }
 
 for (const { label, newline } of [{ label: "LF", newline: "\n" }, { label: "CRLF", newline: "\r\n" }]) {
-  test(`the real lifecycle workflow updates ${label} files and reuses its checkpoint`, async (t) => {
+  test(`the real lifecycle workflow updates ${label} files and reconciles repeated operations`, async (t) => {
     const project = await fixture(t, newline);
     const workflow = createReleaseWorkflow(project.services);
     const built = await workflow.prepare({ ...project.options, version: "0.2.0" });
     assert.equal(await project.publisher.view(built.state.name, "0.2.0"), null);
-    const checkpoint = join(project.directory, "checkpoint");
-    await cp(project.artifacts, checkpoint, { recursive: true });
-    const result = await workflow.complete(project.options);
+    const result = await workflow.run({ ...project.options, version: "0.2.0", env: built.runtime.env });
     assert.equal(result.verification, "verified");
     assert.ok((await project.remoteFile("v0.2.0", "README.md")).includes(
       `## Release Status${newline}${newline}Documentation for version 0.2.0.${newline}`,
@@ -48,7 +47,10 @@ for (const { label, newline } of [{ label: "LF", newline: "\n" }, { label: "CRLF
     assert.deepEqual(bytes, await readFile(join(project.artifacts, result.artifact.filename)));
     assert.deepEqual(bytes, await readFile(project.host.archive(result.name, result.version)));
     const before = (await stat(archive)).mtimeMs;
-    await workflow.complete({ ...project.options, artifacts: checkpoint });
+    const published = await new PublishArtifact().run(built);
+    const pushed = await new PushRelease().run(published);
+    const hosted = await new CreateHostedRelease().run(pushed);
+    await new PrepareNextVersion().run(hosted);
     assert.deepEqual(await readFile(archive), bytes);
     assert.equal((await stat(archive)).mtimeMs, before);
     assert.equal(await project.git("status", "--porcelain"), "");
@@ -67,5 +69,6 @@ test("rejected publication preserves recovery evidence and leaves the remote rel
   ));
   const state = JSON.parse(await readFile(join(project.artifacts, "release.json"), "utf8"));
   assert.equal(state.failedStep, "publish");
-  assert.ok((await readFile(join(project.artifacts, "checkpoint.json"), "utf8")).includes("0.2.0"));
+  assert.ok((await readFile(join(project.artifacts, "release.bundle"))).length > 0);
+  assert.ok((await readFile(join(project.artifacts, state.artifact.filename))).length > 0);
 });

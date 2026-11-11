@@ -16,7 +16,7 @@ export async function checkLifecycle(t, api) {
     }
   }
   let hooks = new api.LifecycleHooks();
-  for (const stage of ["initialize", "validate", "commit", "build", "checkpoint", "restore", "publish", "push", "host", "verify", "success"]) {
+  for (const stage of ["initialize", "validate", "commit", "build", "publish", "push", "host", "verify", "success"]) {
     hooks = hooks.before(stage, new Record(stage)).after(stage, new Record(stage));
   }
   hooks = hooks
@@ -54,29 +54,22 @@ export async function checkLifecycle(t, api) {
     ...fixture.config, hooks, validator: new CheckArtifact(),
     observer: { async succeeded() { events.push("observer:success"); } },
   });
-  const built = await workflow.prepare({ ...fixture, version: "0.2.0" });
-  assert.equal(events.some((event) => event.startsWith("success:")), false);
-  assert.equal(await fixture.git("show", `${built.state.releaseCommit}:LIFECYCLE.txt`), "Release 0.2.0\n");
+  const state = await workflow.run({ ...fixture, version: "0.2.0" });
+  assert.equal(await fixture.git("show", `${state.releaseCommit}:LIFECYCLE.txt`), "Release 0.2.0\n");
   assert.deepEqual(events, [
     "initialize:before:1:initialize", "initialize:after:1:initialize",
     "prepare:before:1:first", "prepare:before:2:second", "prepare:after:1:release-edit",
     "validate:before:1:validate", "validate:after:1:validate",
     "commit:before:1:commit", "commit:after:1:commit",
     "build:before:1:build", "build:after:1:build",
-    "checkpoint:before:1:checkpoint", "checkpoint:after:1:checkpoint",
-  ]);
-  const state = await workflow.complete(fixture);
-  assert.equal(await fixture.git("show", `${state.nextCommit}:LIFECYCLE.txt`), "Next 0.2.1\n");
-  assert.deepEqual(events.slice(13), [
-    "restore:before:1:restore", "restore:after:1:restore",
     "publish:before:1:publish", "publish:after:1:publish",
     "push:before:1:push", "push:after:1:push", "host:before:1:host", "host:after:1:host",
     "next:before:1:before-next", "next:after:1:development-edit",
     "verify:before:1:verify", "verify:after:1:verify",
     "success:before:1:success", "observer:success", "success:after:1:success",
   ]);
-  await workflow.complete(fixture);
+  assert.equal(await fixture.git("show", `${state.nextCommit}:LIFECYCLE.txt`), "Next 0.2.1\n");
   assert.equal(events.filter((event) => event === "next:after:1:development-edit").length, 1);
-  assert.equal(events.filter((event) => event === "success:after:1:success").length, 2);
+  assert.equal(events.filter((event) => event === "success:after:1:success").length, 1);
   await fixture.assertReleased(state);
 }

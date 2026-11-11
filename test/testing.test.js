@@ -149,10 +149,8 @@ test("local publication adapters retain exact bytes, fail explicitly and reject 
   await copyFile(archive, original);
   const notes = join(project.directory, "notes.md");
   await writeFile(notes, "Release notes.");
-  await project.publisher.available(name, "0.1.0");
   await Promise.all([project.publisher.publish(archive), project.publisher.publish(archive)]);
   await project.publisher.publish(archive);
-  await assert.rejects(project.publisher.available(name, "0.1.0"), /already published/u);
   const metadata = await project.publisher.view(name, "0.1.0");
   assert.equal(metadata.dist.integrity, first.integrity);
   assert.deepEqual(await readdir(join(project.publisher.directory, encodeURIComponent(name))), ["0.1.0.tgz"]);
@@ -163,9 +161,12 @@ test("local publication adapters retain exact bytes, fail explicitly and reject 
   await assert.rejects(new TestReleaseHost(join(project.directory, "failure-host"), { failure: "Rejected" })
     .create({ name, version: "0.1.0" }, { archive, notes }), /Rejected/u);
   await project.write("index.js", "module.exports = 2;\n");
-  await npm.pack(project.artifacts, { name, version: "0.1.0" });
-  await assert.rejects(project.publisher.publish(archive), /checksum differs/u);
-  await assert.rejects(project.host.create({ name, version: "0.1.0" }, { archive, notes }), /checksum differs/u);
+  const conflicting = join(project.directory, "conflicting");
+  await mkdir(conflicting);
+  const second = await npm.pack(conflicting, { name, version: "0.1.0" });
+  const different = join(conflicting, second.filename);
+  await assert.rejects(project.publisher.publish(different), /checksum differs/u);
+  await assert.rejects(project.host.create({ name, version: "0.1.0" }, { archive: different, notes }), /checksum differs/u);
   assert.deepEqual(await readFile(project.publisher.archive(name, "0.1.0")), await readFile(original));
   await assert.rejects(project.publisher.view("../escape", "0.1.0"), /package name/u);
   const wrongName = "@npr-test/wrong";

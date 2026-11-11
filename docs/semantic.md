@@ -10,9 +10,9 @@ import { SemanticReleaseWorkflow } from "npm-package-release";
 export default new SemanticReleaseWorkflow();
 ```
 
-`npr prepare`, `npr complete`, and `npr release` use this workflow without new commands or flags. The ordinary `ReleaseWorkflow` uses numeric versions and defaults to `KeepAChangelog`; both require workflow-instance exports. Publication and authentication still require authorization; choosing a semantic workflow does not configure either.
+`npr prepare` and `npr release` use this workflow without new commands or flags. The ordinary `ReleaseWorkflow` uses numeric versions and defaults to `KeepAChangelog`; both require workflow-instance exports. Publication and authentication still require authorization; choosing a semantic workflow does not configure either.
 
-The semantic workflow analyzes commits before preparing project files, generates release notes, and uses the existing validation, exact-archive, checkpoint, publication, Git, hosting, and bounded verification steps. It neither requires nor edits `CHANGELOG.md` by default. Existing `prepare`, validation, artifact, observer, provider, and Git settings remain available, except the manual `changelog` configuration option.
+The semantic workflow analyzes commits before preparing project files, generates release notes, and uses the existing validation, exact-archive, publication, Git, hosting, and bounded verification steps. It neither requires nor edits `CHANGELOG.md` by default. Existing `prepare`, validation, artifact, observer, provider, and Git settings remain available, except the manual `changelog` configuration option.
 
 ## Version and History Policy
 
@@ -69,14 +69,14 @@ Implement these interfaces directly in TypeScript or supply structurally compati
 
 `SemanticReleaseWorkflow(options)` accepts release and semantic service instances directly alongside runtime settings. The default history is scoped to each invocation's command, environment, directory, and remote; an injected history owns its own scoping. A custom `Changelog` must return the captured generated notes, or preparation fails before validation/commit. The ordinary `VersionPolicy` still selects the planned next version, but cannot change the captured release version.
 
-For custom step composition, order `AnalyzeSemanticRelease` before `InitializeSemanticRelease`, then `PrepareRelease`, `ValidateSemanticDecision`, and the ordinary validation/commit/build/checkpoint steps. `AnalyzedReleaseOptions` carries the decision into initialization; the public declarations reject initialization without that record. Custom steps and services own any guarantees they bypass.
+For custom step composition, order `AnalyzeSemanticRelease` before `InitializeSemanticRelease`, then `PrepareRelease`, `ValidateSemanticDecision`, and the ordinary validation/commit/build steps. `AnalyzedReleaseOptions` carries the decision into initialization; the public declarations reject initialization without that record. Custom steps and services own any guarantees they bypass.
 
-## Immutable Completion
+## Invocation-local Analysis
 
 The decision captures the source SHA, baseline, full commit messages, release type, selected version, generated notes, and original explicit override. Preparation binds it to the captured source, release version, and prepared notes. Snapshots freeze copied decision data rather than keeping mutable history-service results.
 
-The checkpoint stores this decision and the `nextDevelopment` policy. Completion validates their binding and uses the retained artifact without reading history or rerunning the analyzer, selector, or notes generator. Use the same semantic workflow mode and next-development setting; ordinary/semantic checkpoint swaps or changed policies fail before publication. Other injected services remain trusted runtime code, not checkpoint instructions. Checkpoints include commit messages, so preserve them with the same access controls as repository history.
+Actions saves the decision in a private runner-temporary file for this invocation and transports its path and original source inputs through the execution provider. The publication phase consumes the same bound decision without rerunning the analyzer, selector, or notes generator against its newly created tag. A new dispatch performs fresh analysis from its current checkout; downloaded artifacts never restore analysis or workflow policy. Keep invocation files private because they contain full commit messages.
 
 With the default disabled next-development policy, hosting is followed directly by verification, the manifest stays at the released version, `nextCommit` is absent, and the final diagnostic phase is `hosted`. The required `nextVersion` field still describes a planned version, not an executed step. With `nextDevelopment: true`, the normal next edits, validation, commit, push, and reconciliation apply; the generated changelog service does not edit a Markdown file.
 
-See [Checkpoints and Reconciliation](checkpoints.md) for durable handoff and recovery limits, [Composable Workflows](workflows.md) for base steps, and [Execution Providers and Contexts](execution.md) for lifecycle reporting. Native workspaces, prerelease channels, and alternate registries/hosts remain outside the built-in scope.
+See [Recovery and Reconciliation](recovery.md) for artifact preservation and recovery limits, [Composable Workflows](workflows.md) for base steps, and [Execution Providers and Contexts](execution.md) for lifecycle reporting. Native workspaces, prerelease channels, and alternate registries/hosts remain outside the built-in scope.

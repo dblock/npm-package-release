@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, readdir, rename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -153,10 +153,7 @@ export class DirectoryReleaseStore implements ReleaseStore {
 
   async initialize(state: ReleaseState): Promise<void> {
     await mkdir(this.directory, { recursive: true });
-    if ((await readdir(this.directory)).length) {
-      throw new Error("Existing release artifacts: inspect recovery state; never blindly republish.");
-    }
-    await writeFile(join(this.directory, "release.json"), JSON.stringify(state, null, 2) + "\n", { flag: "wx" });
+    await this.save(state);
   }
 
   async read(): Promise<ReleaseState> {
