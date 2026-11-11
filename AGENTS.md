@@ -26,6 +26,8 @@ Maintain separate `Test`, `Lint`, and `Package` workflows and Coveralls upload. 
 
 Keep Markdown paragraphs on one line. Update documentation with behavior; keep DESIGN current and remove superseded proposals rather than writing an implementation diary. Add changelog entries for features, improvements, and fixes, not minor typos or the initial scaffold. Use actual PR numbers and contributor attribution, oldest to newest above the final Next placeholder; predict the number before opening and verify/correct it afterward. See CONTRIBUTING for the exact entry format.
 
+Preserve the editable SVG and generated transparent PNG under `assets/`, their MIT provenance, README-first placement at 160 pixels with alt text, and inclusion in the npm archive. Follow [artwork maintenance](DESIGN.md#artwork) for regeneration and full-size/light/dark rendering checks; do not copy the npm wordmark or embed external resources.
+
 Before changing the version, check the npm registry to establish whether the current version was released; ask if status cannot be established. Keep unreleased versions unchanged, including the initial `0.1.0`. If released, include the bump in the same PR as the change and synchronize `package.json`, `package-lock.json`, and the Next changelog heading. Features in `0.x` increment minor and reset patch (`0.1.1` to `0.2.0`); features in `1.x` and later increment minor while preserving patch (`5.3.1` to `5.4.1`). Breaking changes are allowed within `0.x`: increment minor and reset patch when released, without requesting a major bump. For breaking changes in `1.x` and later, ask before choosing a major bump. Document breaking behavior and migration guidance.
 
 ## Git and Publication Safety

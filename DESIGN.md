@@ -2,7 +2,7 @@
 
 ## Purpose and Scope
 
-Port [ruby-gem-release](https://github.com/dblock/ruby-gem-release) to npm with class-based, strongly typed workflow composition. Provide a safe default for one public root npm package, numeric release versions, Intridea or Keep a Changelog notes, npm publication, Git, and optional GitHub Releases. Consumers can compose their own steps and service classes. Native workspace, alternate-registry/host, prerelease, and artwork implementations remain deferred.
+Port [ruby-gem-release](https://github.com/dblock/ruby-gem-release) to npm with class-based, strongly typed workflow composition. Provide a safe default for one public root npm package, numeric release versions, Intridea or Keep a Changelog notes, npm publication, Git, and optional GitHub Releases. Consumers can compose their own steps and service classes. Native workspace, alternate-registry/host, and prerelease implementations remain deferred.
 
 Keep `npm-package-release` as the repository/npm package name, `npr` as the executable, and `npr.config.js` as the trusted configuration module. TypeScript implementation lives in `src/`; compile ESM JavaScript, declarations, and source maps to ignored `dist/`. The executable lives in `bin/`, unit/release tests in `test/`, compile-time contracts in `test/types/`, installed-package tests in `test/integration/`, and maintenance tools in `scripts/`. Use public Node.js, npm, Git, and GitHub APIs; use SemVer for incrementing and mdast for source-preserving changelog boundaries.
 
@@ -63,3 +63,11 @@ Consumers require Node.js 22.14+, 24, or 26+; development uses Node.js 26/npm 12
 Release tests run the real implementation with isolated Git remotes, npm test/lint, actual tarballs, and installed consumers; intercept only registry lookup/publication and hosted-release creation. The packed consumer invokes the installed library's full release flow and, on Unix, the actual release CLI command read from both YAML interfaces, using isolated npm/GitHub publication shims. Source and installed executables share CLI assertions. These checks do not prove live OIDC authentication, provenance, or Actions artifact uploading, and PR CI never dispatches a publishing workflow.
 
 Keep this document focused on the current design and relevant rationale, removing superseded proposals rather than maintaining an implementation diary.
+
+## Artwork
+
+The logo is a single package box with an upward release arrow and a white packing-tape detail. Its simple geometry and red (`#cb3837`)/white palette draw on the [npm](https://www.npmjs.com) visual aesthetic; the illustration is original artwork, not a copy of the npm wordmark or an endorsement by npm. GitHub Copilot created the geometric SVG for this project on behalf of @dblock. No third-party artwork or fonts are embedded; both assets use the project's [MIT license](LICENSE).
+
+Edit [assets/logo.svg](assets/logo.svg), the source of truth, and regenerate the transparent 512-pixel [assets/logo.png](assets/logo.png) with `rsvg-convert --width 512 --height 512 --output assets/logo.png assets/logo.svg`. The SVG contains only paths and has no external resources. Keep both files in the npm archive so the image resolves in the packaged README.
+
+Preserve the logo above the README title at a display width of 160 pixels with descriptive alt text. After edits, inspect the full-size PNG and a 160-pixel rendering on light and dark backgrounds for clipping, contrast, and a recognizable box-and-arrow silhouette. Keep transparent outer padding and the white tape detail rather than adding a background rectangle.

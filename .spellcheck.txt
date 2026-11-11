@@ -7,6 +7,7 @@ Intridea
 Lifecycle
 LCOV
 OIDC
+SVG
 dblock
 gemspec
 js
@@ -15,4 +16,6 @@ mdast
 lifecycle
 republish
 republishing
+svg
+wordmark
 worktrees
