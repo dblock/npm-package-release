@@ -1,6 +1,8 @@
 import process from "node:process";
 import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { command } from "./command.js";
+import { generatedChangelog } from "./changelog.js";
 import { Workflow } from "./workflow.js";
 import { prepareRelease, finishRelease } from "./release.js";
 import { lifecycleOptions } from "./lifecycle.js";
@@ -47,10 +49,17 @@ export class AnalyzeSemanticRelease implements Step<ReleaseOptions, AnalyzedRele
 }
 
 export class GeneratedChangelog implements Changelog {
-  constructor(readonly decision: SemanticDecision) {}
-  async release({ version }: { version: string; date: string }): Promise<string> {
+  constructor(readonly decision: SemanticDecision, readonly path = "CHANGELOG.md") {}
+  async release({ version, date, cwd }: { version: string; date: string; cwd?: string }): Promise<string> {
     this.decision.check(this.decision.head, version);
     if (!this.decision.notes) throw new Error("Semantic release notes are missing.");
+    const path = resolve(cwd || ".", this.path);
+    let source = "# Changelog\n";
+    try { source = await readFile(path, "utf8"); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    const updated = generatedChangelog(source, { version, date, notes: this.decision.notes });
+    if (updated !== source) await writeFile(path, updated);
     return this.decision.notes;
   }
   async next(): Promise<void> {}
