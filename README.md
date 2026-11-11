@@ -90,11 +90,11 @@ This publishes the checked-in version and prepares the next patch version. After
 
 ## Configuration
 
-See [Detailed Usage](docs/usage.md) for CLI/API commands and defaults; [Lifecycle Hooks](docs/hooks.md) for ordered stage extensions; [Composable Workflows](docs/workflows.md) for custom classes and services; and [Semantic Releases](docs/semantic.md) for opt-in Conventional Commits versioning and generated notes.
+See [Detailed Usage](docs/usage.md) for CLI/API commands and defaults; [Changelog Templates](docs/changelogs.md) for contribution prompts and categories; [Lifecycle Hooks](docs/hooks.md) for ordered stage extensions; [Composable Workflows](docs/workflows.md) for custom classes and services; and [Semantic Releases](docs/semantic.md) for opt-in Conventional Commits versioning and generated notes.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Lifecycle Hooks](docs/hooks.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Checkpoints and Reconciliation](docs/checkpoints.md), and [Semantic Releases](docs/semantic.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Changelog Templates](docs/changelogs.md), [Lifecycle Hooks](docs/hooks.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Checkpoints and Reconciliation](docs/checkpoints.md), and [Semantic Releases](docs/semantic.md).
 
 ## License
 

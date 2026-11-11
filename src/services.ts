@@ -4,7 +4,8 @@ import { basename, join, resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { inc, valid } from "semver";
 import { numericVersion } from "./command.js";
-import { releaseChangelog, nextChangelog } from "./changelog.js";
+import { releaseChangelog, nextChangelog, changelogTemplate } from "./changelog.js";
+import type { ChangelogTemplate } from "./changelog.js";
 import { matchingPublication } from "./package.js";
 import { semanticPlan } from "./semantic.js";
 import type {
@@ -41,27 +42,33 @@ export class NumericPatchVersions implements VersionPolicy {
 
 export abstract class MarkdownChangelog implements Changelog {
   abstract readonly format: ChangelogFormat;
-  constructor(readonly path = "CHANGELOG.md") {}
+  constructor(readonly path = "CHANGELOG.md", protected readonly template: ChangelogTemplate = {}) {}
 
   async release(identity: { version: string; date: string; cwd?: string }): Promise<string> {
     const path = resolve(identity.cwd || ".", this.path);
-    const updated = releaseChangelog(await readFile(path, "utf8"), { ...identity, format: this.format });
+    const updated = releaseChangelog(await readFile(path, "utf8"), { ...identity, ...this.template, format: this.format });
     await writeFile(path, updated.source);
     return updated.notes;
   }
 
   async next(identity: { version: string; releasedVersion: string; cwd?: string }): Promise<void> {
     const path = resolve(identity.cwd || ".", this.path);
-    await writeFile(path, nextChangelog(await readFile(path, "utf8"), { ...identity, format: this.format }));
+    await writeFile(path, nextChangelog(await readFile(path, "utf8"), { ...identity, ...this.template, format: this.format }));
   }
 }
 
 export class KeepAChangelog extends MarkdownChangelog {
   readonly format = "keep-a-changelog";
+  constructor(path = "CHANGELOG.md", template: ChangelogTemplate = {}) {
+    super(path, changelogTemplate("keep-a-changelog", template));
+  }
 }
 
 export class IntrideaChangelog extends MarkdownChangelog {
   readonly format = "intridea";
+  constructor(path = "CHANGELOG.md", template: { readonly placeholder?: string } = {}) {
+    super(path, changelogTemplate("intridea", template));
+  }
 }
 
 export class GitHubReleaseHost implements ReleaseHost {
