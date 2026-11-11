@@ -3,7 +3,7 @@ import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
 import { numericVersion } from "./command.js";
 import type { Nodes } from "mdast";
-import type { ChangelogConfig } from "./contracts.js";
+import type { ChangelogFormat } from "./contracts.js";
 
 function document(source: string) {
   return fromMarkdown(source, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
@@ -58,7 +58,7 @@ function compareReference(source: string, version: string) {
   ]]);
 }
 
-export function releaseChangelog(source: string, { format, version, date }: ChangelogConfig & { version: string; date: string }) {
+export function releaseChangelog(source: string, { format, version, date }: { format: ChangelogFormat; version: string; date: string }) {
   numericVersion(version);
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Expected a YYYY-MM-DD release date.");
   if (!["intridea", "keep-a-changelog"].includes(format)) throw new Error("Unknown changelog format.");
@@ -86,7 +86,7 @@ export function releaseChangelog(source: string, { format, version, date }: Chan
   return { source: updated, notes: notes.trim() };
 }
 
-export function nextChangelog(source: string, { format, version, releasedVersion }: ChangelogConfig & { version: string; releasedVersion: string }) {
+export function nextChangelog(source: string, { format, version, releasedVersion }: { format: ChangelogFormat; version: string; releasedVersion: string }) {
   numericVersion(version);
   numericVersion(releasedVersion);
   const intridea = format === "intridea";

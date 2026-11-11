@@ -108,8 +108,8 @@ test("semantic workflow uses actual reachable tags and checkpointed decisions wi
 test("explicit semantic releases can opt into a next-development commit", async (t) => {
   const fixture = await releaseFixture(t);
   const workflow = new api.SemanticReleaseWorkflow({
-    nextDevelopment: true, verification: fixture.config.verification,
-    next: fixture.config.next, validateArtifact: fixture.config.validateArtifact,
+    nextDevelopment: true, verifier: fixture.config.verifier,
+    next: fixture.config.next, validator: fixture.config.validator,
   });
   const result = await workflow.run({ ...fixture, version: "2.3.4" });
   assert.equal(result.verification, "verified");
@@ -149,7 +149,7 @@ test("ineligible, shallow, and stale semantic inputs fail before project edits o
     async release() { return "Notes outside the captured decision"; }
     async next() {}
   }
-  await assert.rejects(new api.SemanticReleaseWorkflow({}, { changelog: new AlteredNotes() }).prepare(fixture), /notes differ/u);
+  await assert.rejects(new api.SemanticReleaseWorkflow({ changelog: new AlteredNotes() }).prepare(fixture), /notes differ/u);
   assert.equal(fixture.events.includes("npm pack"), false);
   assert.equal(fixture.published.length, 0);
 });

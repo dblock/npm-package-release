@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import process from "node:process";
-import { ReleaseWorkflow } from "npm-package-release";
+import { HookValidator, IntrideaChangelog, ReleaseWorkflow } from "npm-package-release";
 
 export default new ReleaseWorkflow({
-  changelog: { format: "intridea" },
-  async validateArtifact({ consumer, version, run }) {
+  changelog: new IntrideaChangelog(),
+  validator: new HookValidator({ async validateArtifact({ consumer, version, run }) {
     await run(process.execPath, ["--input-type=module", "--eval", `
 import assert from "node:assert/strict";
 import process from "node:process";
@@ -23,5 +23,5 @@ assert.equal(await Workflow.start().then(new CheckInstalledVersion()).run(proces
       join(consumer, "node_modules/npm-package-release/bin/npr.js"), "--version",
     ], { cwd: consumer });
     assert.equal(output.trim(), version);
-  },
+  } }),
 });

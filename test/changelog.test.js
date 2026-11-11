@@ -1,10 +1,37 @@
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { releaseChangelog, nextChangelog } from "../dist/changelog.js";
+import { IntrideaChangelog, KeepAChangelog } from "../dist/index.js";
 
 const intridea = "# Changelog\n\n## 0.1.0 (Next)\n\n- Fix Unicode offsets: caf\u00e9.\n- Your contribution here.\n";
 const keep = "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- Ship a package.\n\n## [0.0.1] - 2025-01-01\n\n- Earlier.\n\n[Unreleased]: https://github.com/a/b/compare/v0.0.1...master\n[0.0.1]: https://github.com/a/b/releases/tag/v0.0.1\n";
 const options = { version: "0.1.0", date: "2026-11-09" };
+
+test("changelog classes resolve default, relative and absolute paths against the invocation directory", async (t) => {
+  const cwd = await mkdtemp(join(tmpdir(), "npr-changelog-"));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  await mkdir(join(cwd, "docs"));
+  for (const [changelog, source, path] of [
+    [new KeepAChangelog(), keep, join(cwd, "CHANGELOG.md")],
+    [new KeepAChangelog("docs/HISTORY.md"), keep, join(cwd, "docs/HISTORY.md")],
+    [new IntrideaChangelog(join(cwd, "INTRIDEA.md")), intridea, join(cwd, "INTRIDEA.md")],
+  ]) {
+    await writeFile(path, source);
+    const notes = await changelog.release({ ...options, cwd });
+    assert.ok(notes);
+    await changelog.next({ version: "0.1.1", releasedVersion: "0.1.0", cwd });
+    const actual = await readFile(path, "utf8");
+    const released = releaseChangelog(source, { ...options, format: changelog.format });
+    assert.equal(actual, nextChangelog(released.source, {
+      format: changelog.format, version: "0.1.1", releasedVersion: "0.1.0",
+    }));
+    await assert.rejects(changelog.release({ version: "0.1.1", date: "2026-11-10", cwd }), /empty/u);
+    assert.equal(await readFile(path, "utf8"), actual);
+  }
+});
 
 test("Intridea releases preserve source/Unicode and insert the next section", () => {
   const released = releaseChangelog(intridea, { ...options, format: "intridea" });

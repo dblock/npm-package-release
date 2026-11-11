@@ -19,7 +19,7 @@ test("a downloaded checkpoint completes in a fresh checkout and reconciles faile
     },
   });
   let notifications = 0;
-  const config = { ...fixture.config, observer: { async succeeded() { notifications++; } } };
+  const config = new api.ReleaseWorkflow({ ...fixture.config, observer: { async succeeded() { notifications++; } } });
   const built = await api.prepare(config, fixture);
   assert.equal(fixture.published.length, 0);
   assert.equal(notifications, 0);
@@ -61,7 +61,7 @@ test("a downloaded checkpoint completes in a fresh checkout and reconciles faile
 
 test("checkpoint validation rejects changed evidence and strips unrelated metadata before any publication", async (t) => {
   const fixture = await releaseFixture(t);
-  await api.prepare(fixture.config, fixture);
+  await api.prepare(new api.ReleaseWorkflow(fixture.config), fixture);
   const path = join(fixture.artifacts, "checkpoint.json");
   const original = JSON.parse(await readFile(path, "utf8"));
   for (const patch of [
@@ -75,7 +75,7 @@ test("checkpoint validation rejects changed evidence and strips unrelated metada
     { release: { ...original.release, notes: "Different notes" } },
   ]) {
     await writeFile(path, JSON.stringify({ ...original, ...patch }));
-    await assert.rejects(api.complete(fixture.config, fixture));
+    await assert.rejects(api.complete(new api.ReleaseWorkflow(fixture.config), fixture));
     assert.equal(fixture.published.length, 0);
   }
   await writeFile(path, JSON.stringify({
@@ -85,26 +85,26 @@ test("checkpoint validation rejects changed evidence and strips unrelated metada
   assert.equal(checkpoint.source.name, undefined);
   assert.equal(checkpoint.source.environment, undefined);
   assert.throws(() => { checkpoint.source.releaseCommit = "changed"; }, TypeError);
-  await assert.rejects(api.complete({ ...fixture.config, branch: "different" }, fixture), /Configuration differs/u);
+  await assert.rejects(api.complete(new api.ReleaseWorkflow({ ...fixture.config, branch: "different" }), fixture), /Configuration differs/u);
   await writeFile(join(fixture.artifacts, original.artifact.filename), "Changed archive");
-  await assert.rejects(api.complete(fixture.config, fixture));
+  await assert.rejects(api.complete(new api.ReleaseWorkflow(fixture.config), fixture));
   assert.equal(fixture.published.length, 0);
 });
 
 test("published versions are reused only when both archive checksums match", async (t) => {
   const fixture = await releaseFixture(t);
-  const built = await api.prepare(fixture.config, fixture);
+  const built = await api.prepare(new api.ReleaseWorkflow(fixture.config), fixture);
   fixture.published.push({ name: built.release.name, version: built.release.version, dist: { integrity: "different", shasum: "different" } });
-  await assert.rejects(api.complete(fixture.config, fixture), /integrity mismatch/u);
+  await assert.rejects(api.complete(new api.ReleaseWorkflow(fixture.config), fixture), /integrity mismatch/u);
   fixture.published[0].dist = {};
-  await assert.rejects(api.complete(fixture.config, fixture), /unavailable/u);
+  await assert.rejects(api.complete(new api.ReleaseWorkflow(fixture.config), fixture), /unavailable/u);
   assert.equal(fixture.events.filter((event) => event === "npm publish").length, 0);
   assert.equal((await fixture.git("ls-remote", "origin", "refs/heads/master")).split("\t")[0], built.state.initialCommit);
 });
 
 test("matching Git refs can be reused and missing tags completed without rewinding descendants", async (t) => {
   const fixture = await releaseFixture(t);
-  const built = await api.prepare(fixture.config, fixture);
+  const built = await api.prepare(new api.ReleaseWorkflow(fixture.config), fixture);
   const { repository } = built.runtime.services;
   await repository.tag(built.release.version, built.state.releaseCommit);
   await assert.rejects(repository.tag(built.release.version, built.state.initialCommit), /another commit/u);

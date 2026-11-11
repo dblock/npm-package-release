@@ -2,7 +2,7 @@ import {
   Workflow, InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact,
   PublishArtifact, release, ReleaseWorkflow,
   LocalExecutionProvider, prepare, complete,
-  SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease,
+  SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
@@ -62,7 +62,20 @@ class Notes implements Changelog {
 class Versions implements VersionPolicy {
   select(version: string) { return { version, nextVersion: "1.0.0" }; }
 }
-new ReleaseWorkflow(config, { changelog: new Notes(), versions: new Versions() }, new LocalExecutionProvider({}));
+new ReleaseWorkflow({ changelog: new Notes(), versions: new Versions(), provider: new LocalExecutionProvider({}) });
+new ReleaseWorkflow();
+new ReleaseWorkflow({ changelog: new KeepAChangelog("docs/CHANGES.md"), validator: new HookValidator() });
+new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
+// @ts-expect-error Format objects are not changelog implementations.
+new ReleaseWorkflow({ changelog: { format: "intridea" } });
+// @ts-expect-error Hosting is selected with a host instance or null.
+new ReleaseWorkflow({ github: false });
+// @ts-expect-error Validation is supplied as a validator instance.
+new ReleaseWorkflow({ validate: async () => {} });
+// @ts-expect-error Release API accepts workflows, not configuration objects.
+release(config);
+// @ts-expect-error Staged API accepts workflows, not configuration objects.
+prepare(config);
 export async function checkpointContracts() {
   const workflow = new ReleaseWorkflow(config);
   workflow satisfies CheckpointWorkflow<BuiltRelease, Awaited<ReturnType<typeof workflow.complete>>>;
@@ -78,13 +91,13 @@ export function immutableCheckpoint(checkpoint: ReleaseCheckpoint) {
   complete(checkpoint);
 }
 export function semanticContracts(history: SemanticHistory, analyzer: CommitAnalyzer, selector: SemanticVersionPolicy, notes: SemanticNotes) {
-  const workflow = new SemanticReleaseWorkflow({}, { history, analyzer, selector, notes });
+  const workflow = new SemanticReleaseWorkflow({ history, analyzer, selector, notes });
   workflow satisfies CheckpointWorkflow<BuiltRelease, Awaited<ReturnType<typeof workflow.complete>>>;
   Workflow.start<ReleaseOptions>().then(new AnalyzeSemanticRelease()).then(new InitializeSemanticRelease());
   // @ts-expect-error Semantic initialization requires an analyzed decision.
   Workflow.start<ReleaseOptions>().then(new InitializeSemanticRelease());
   // @ts-expect-error An analyzer must return a supported release type.
-  new SemanticReleaseWorkflow({}, { analyzer: { analyze() { return "anything"; } } });
+  new SemanticReleaseWorkflow({ analyzer: { analyze() { return "anything"; } } });
   return workflow;
 }
 export function immutableDecision(decision: SemanticDecision) {
@@ -94,7 +107,7 @@ export function immutableDecision(decision: SemanticDecision) {
   decision.commits[0].message = "Changed";
 }
 // @ts-expect-error Service implementations must satisfy the complete interface.
-new ReleaseWorkflow(config, { publisher: { async publish() {} } });
+new ReleaseWorkflow({ ...config, publisher: { async publish() {} } });
 
 export function serviceContracts(
   repository: ReleaseRepository, project: PackageProject, publisher: PackagePublisher, host: ReleaseHost,

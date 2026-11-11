@@ -103,23 +103,23 @@ test("workflow history is immutable, scoped per invocation, and propagated throu
 
 test("initialization failures notify observers once even without a captured release", async () => {
   const failures = [];
-  await assert.rejects(api.release({}, {
+  await assert.rejects(api.release(new api.ReleaseWorkflow({ changelog: {} }), {
     env: { GITHUB_ACTIONS: "false" },
     observer: {
       async failed(event) { failures.push(event); throw new Error("Notification also failed"); },
       async succeeded() { assert.fail("Initialization failed"); },
     },
-  }), /explicit changelog/u);
+  }), /Changelog must implement/u);
   assert.equal(failures.length, 1);
   assert.equal(failures[0].id, "initialize");
   assert.equal(failures[0].execution.release, null);
   assert.equal(failures[0].execution.steps.initialize.outcome, "failure");
   assert.ok(failures[0].error instanceof Error);
   const configured = [];
-  await assert.rejects(api.release({
+  await assert.rejects(api.release(new api.ReleaseWorkflow({
     changelog: { format: "invalid" },
     observer: { async failed({ id }) { configured.push(id); } },
-  }, { env: {} }), /changelog format/u);
+  }), { env: {} }), /Changelog must implement/u);
   assert.deepEqual(configured, ["initialize"]);
 });
 
@@ -158,14 +158,14 @@ test("an injected provider owns release guards and summaries without GitHub ambi
   const callbacks = [];
   const notificationError = new Error("Project notification failed after publication");
   const workflow = new api.ReleaseWorkflow({
-    ...fixture.config,
+    ...fixture.config, provider,
     async prepare(context) {
       callbacks.push(context.execution);
       assert.equal(context.execution.release.manifestVersion, "0.1.0");
       assert.equal(context.execution.release.version, "0.2.0");
       assert.ok(context.execution.release.notes.includes("Ship release tooling."));
     },
-  }, {}, provider);
+  });
   await assert.rejects(workflow.run({
     ...fixture, version: "0.2.0",
     env: { ...fixture.env, GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request" },

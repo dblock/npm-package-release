@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, writeFile, rm, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { release, verify } from "../dist/index.js";
+import { release, verify, ReleaseWorkflow, HookValidator } from "../dist/index.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
 
 test("release uses actual Git pushes, npm tests/lint, and exact archive consumers", async (t) => {
@@ -10,7 +10,7 @@ test("release uses actual Git pushes, npm tests/lint, and exact archive consumer
   fixture.env.GITHUB_ACTIONS = "true";
   fixture.env.GITHUB_EVENT_NAME = "workflow_dispatch";
   fixture.env.GITHUB_REF = "refs/heads/master";
-  const result = await release(fixture.config, { ...fixture, version: "0.2.0" });
+  const result = await release(new ReleaseWorkflow(fixture.config), { ...fixture, version: "0.2.0" });
   await fixture.assertReleased(result);
   assert.equal(result.version, "0.2.0");
   assert.equal(result.nextVersion, "0.2.1");
@@ -32,7 +32,7 @@ test("release uses actual Git pushes, npm tests/lint, and exact archive consumer
 
 test("missing registry visibility times out after hosting and next preparation without republishing", async (t) => {
   const fixture = await releaseFixture(t, { missingLookups: 100 });
-  const result = await release(fixture.config, fixture);
+  const result = await release(new ReleaseWorkflow(fixture.config), fixture);
   assert.equal(result.verification, "unverified");
   assert.equal(fixture.published.length, 1);
   assert.equal(result.phase, "next");
@@ -43,7 +43,7 @@ test("missing registry visibility times out after hosting and next preparation w
 test("null changelog and disabled GitHub hosting preserve package publication and version increments", async (t) => {
   const fixture = await releaseFixture(t);
   const original = await readFile(join(fixture.cwd, "CHANGELOG.md"), "utf8");
-  const result = await release({ ...fixture.config, changelog: null, github: false }, fixture);
+  const result = await release(new ReleaseWorkflow({ ...fixture.config, changelog: null, host: null }), fixture);
   assert.equal(result.verification, "verified");
   assert.equal(fixture.events.includes("gh release"), false);
   assert.equal(await readFile(join(fixture.cwd, "CHANGELOG.md"), "utf8"), original);
@@ -53,16 +53,16 @@ test("dirty checkouts and unexpected validation/index changes cannot enter a rel
   const fixture = await releaseFixture(t);
   const initial = await fixture.commit();
   await writeFile(join(fixture.cwd, "unrelated.txt"), "Keep this work.\n");
-  await assert.rejects(release(fixture.config, fixture), /clean checkout/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /clean checkout/u);
   assert.equal(await readFile(join(fixture.cwd, "unrelated.txt"), "utf8"), "Keep this work.\n");
   await rm(join(fixture.cwd, "unrelated.txt"));
-  await assert.rejects(release({
+  await assert.rejects(release(new ReleaseWorkflow({
     ...fixture.config,
-    validate: async () => {
+    validator: new HookValidator({ validate: async () => {
       await writeFile(join(fixture.cwd, "injected.txt"), "Not preparation.\n");
       await fixture.git("add", "injected.txt");
-    },
-  }, fixture), /Unexpected/u);
+    } }),
+  }), fixture), /Unexpected/u);
   assert.equal(await fixture.commit(), initial);
   assert.equal(fixture.published.length, 0);
 });
@@ -70,10 +70,10 @@ test("dirty checkouts and unexpected validation/index changes cannot enter a rel
 test("local and remote duplicate tags are rejected without touching project files", async (t) => {
   const fixture = await releaseFixture(t);
   await fixture.git("tag", "v0.1.0");
-  await assert.rejects(release(fixture.config, fixture), /tag already exists/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /tag already exists/u);
   await fixture.git("push", "origin", "refs/tags/v0.1.0");
   await fixture.git("tag", "-d", "v0.1.0");
-  await assert.rejects(release(fixture.config, fixture), /tag already exists/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /tag already exists/u);
   assert.equal(await fixture.git("status", "--porcelain"), "");
 });
 
@@ -84,7 +84,7 @@ test("duplicate versions and non-404 registry errors fail closed", async (t) => 
     { registryError: Object.assign(new Error("Malformed response"), { stdout: "<html>" }) },
   ]) {
     const fixture = await releaseFixture(t, settings);
-    await assert.rejects(release(fixture.config, fixture), /already published|Registry unavailable|Malformed response/u);
+    await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /already published|Registry unavailable|Malformed response/u);
     assert.equal(fixture.published.length, 0);
     assert.equal(await fixture.git("status", "--porcelain"), "");
   }
@@ -96,7 +96,7 @@ test("a failed remote push after publication retains the archive/bundle and neve
       if (program === "git" && args[0] === "push") throw new Error("Simulated remote push failure");
     },
   });
-  await assert.rejects(release(fixture.config, fixture), /push failure/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /push failure/u);
   const state = await fixture.state();
   assert.equal(state.phase, "published");
   assert.equal(fixture.published.length, 1);
@@ -104,7 +104,7 @@ test("a failed remote push after publication retains the archive/bundle and neve
   assert.equal(fixture.events.includes("next"), false);
   assert.ok((await readFile(join(fixture.artifacts, "release.bundle"))).length > 0);
   assert.ok((await readFile(join(fixture.artifacts, state.artifact.filename))).length > 0);
-  await assert.rejects(release(fixture.config, fixture), /Remote branch advanced/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /Remote branch advanced/u);
   assert.equal(fixture.published.length, 1);
 });
 
@@ -116,7 +116,7 @@ test("failed publication and hosted-release creation do not prepare next develop
           (program === "gh" && operation === "release")) throw new Error(`Failed ${operation}`);
       },
     });
-    await assert.rejects(release(fixture.config, fixture), new RegExp(`Failed ${operation}`, "u"));
+    await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), new RegExp(`Failed ${operation}`, "u"));
     assert.equal(fixture.events.includes("next"), false);
     assert.equal((await fixture.state()).phase, operation === "publish" ? "publishing" : "pushed");
   }
@@ -125,26 +125,26 @@ test("failed publication and hosted-release creation do not prepare next develop
 test("consumer failure stops before publication and removes its isolated consumer", async (t) => {
   const fixture = await releaseFixture(t);
   let consumer;
-  await assert.rejects(release({
+  await assert.rejects(release(new ReleaseWorkflow({
     ...fixture.config,
-    validateArtifact: async (context) => {
+    validator: new HookValidator({ validateArtifact: async (context) => {
       consumer = context.consumer;
       throw new Error("Public API is broken");
-    },
-  }, fixture), /Public API is broken/u);
+    } }),
+  }), fixture), /Public API is broken/u);
   await assert.rejects(readFile(join(consumer, "package.json")), { code: "ENOENT" });
   assert.equal(fixture.published.length, 0);
 });
 
 test("failed next-development validation preserves the published release without pushing invalid files", async (t) => {
   const fixture = await releaseFixture(t);
-  await assert.rejects(release({
+  await assert.rejects(release(new ReleaseWorkflow({
     ...fixture.config,
-    validate: async ({ phase, run }) => {
+    validator: new HookValidator({ validate: async ({ phase, run }) => {
       await run("npm", ["test"]);
       if (phase === "next") throw new Error("Development validation failed");
-    },
-  }, fixture), /Development validation failed/u);
+    } }),
+  }), fixture), /Development validation failed/u);
   const state = await fixture.state();
   assert.equal(state.phase, "hosted");
   assert.equal(fixture.published.length, 1);
@@ -161,7 +161,7 @@ test("a concurrent remote branch advance after publication prevents the atomic p
       await git("push", "origin", `${concurrent}:master`);
     },
   });
-  await assert.rejects(release(fixture.config, fixture), /Remote branch advanced/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /Remote branch advanced/u);
   assert.equal(fixture.published.length, 1);
   assert.equal(fixture.events.includes("next"), false);
 });
@@ -176,7 +176,7 @@ test("retained and registry integrity mismatches fail rather than republish", as
         }
       } : undefined,
     });
-    await assert.rejects(release(fixture.config, fixture));
+    await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture));
     assert.equal(fixture.published.length, 1);
     if (tamper === "registry") assert.equal((await fixture.state()).verification, "failed");
   }
@@ -185,23 +185,23 @@ test("retained and registry integrity mismatches fail rather than republish", as
 test("invalid configuration, versions, runtime scope, and existing artifacts fail safely", async (t) => {
   const fixture = await releaseFixture(t);
   for (const config of [
-    {}, { changelog: { format: "bad" } }, { ...fixture.config, prepare: "npm test" },
+    { changelog: false }, { changelog: { format: "bad" } }, { ...fixture.config, prepare: "npm test" },
     { ...fixture.config, timezone: "Not/A_Zone" },
     { ...fixture.config, verification: { attempts: 0 } },
     { ...fixture.config, repository: "not-a-repository" },
     { ...fixture.config, remote: "--upload-pack=bad" },
-  ]) await assert.rejects(release(config, fixture));
-  await assert.rejects(release(fixture.config, { ...fixture, version: "1.0.0-beta.1" }), /numeric/u);
-  await assert.rejects(release(fixture.config, { ...fixture, version: "9007199254740992.0.0" }), /semantic/u);
-  await assert.rejects(release(fixture.config, { ...fixture, env: {
+  ]) await assert.rejects(release(new ReleaseWorkflow(config), fixture));
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), { ...fixture, version: "1.0.0-beta.1" }), /numeric/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), { ...fixture, version: "9007199254740992.0.0" }), /semantic/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), { ...fixture, env: {
     ...fixture.env, GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request",
   } }), /manual dispatch/u);
   const subdirectory = join(fixture.cwd, "subdirectory");
   await mkdir(subdirectory);
-  await assert.rejects(release(fixture.config, { ...fixture, cwd: subdirectory }), /repository root/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), { ...fixture, cwd: subdirectory }), /repository root/u);
   await mkdir(fixture.artifacts);
   await writeFile(join(fixture.artifacts, "preserve.txt"), "Do not overwrite.");
-  await assert.rejects(release(fixture.config, fixture), /Existing release artifacts/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /Existing release artifacts/u);
   assert.equal(await readFile(join(fixture.artifacts, "preserve.txt"), "utf8"), "Do not overwrite.");
 });
 
@@ -213,14 +213,14 @@ test("remote tag lookup failures are not interpreted as tag absence", async (t) 
       }
     },
   });
-  await assert.rejects(release(fixture.config, fixture), /Cannot contact remote/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /Cannot contact remote/u);
   assert.equal(fixture.published.length, 0);
 });
 
 test("private/workspace packages and mismatched lockfiles are rejected", async (t) => {
   for (const manifest of [{ private: true }, { workspaces: ["packages/*"] }, { name: "INVALID" }]) {
     const fixture = await releaseFixture(t, { manifest });
-    await assert.rejects(release(fixture.config, fixture), /public root package|package name/u);
+    await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /public root package|package name/u);
   }
   const fixture = await releaseFixture(t);
   const lockPath = join(fixture.cwd, "package-lock.json");
@@ -230,7 +230,7 @@ test("private/workspace packages and mismatched lockfiles are rejected", async (
   await fixture.git("add", "package-lock.json");
   await fixture.git("commit", "-m", "Mismatched lock");
   await fixture.git("push", "origin", "master");
-  await assert.rejects(release(fixture.config, fixture), /Lockfile/u);
+  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /Lockfile/u);
   assert.equal(fixture.published.length, 0);
 });
 
@@ -239,6 +239,6 @@ test("GitHub summaries are isolated from the real environment", async (t) => {
   fixture.env.GITHUB_ACTIONS = "true";
   fixture.env.GITHUB_EVENT_NAME = "workflow_dispatch";
   fixture.env.GITHUB_REF = "refs/heads/master";
-  await release(fixture.config, fixture);
+  await release(new ReleaseWorkflow(fixture.config), fixture);
   assert.match(await readFile(fixture.env.GITHUB_STEP_SUMMARY, "utf8"), /@npr-test\/example@0.1.0: verified/u);
 });

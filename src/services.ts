@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir, readdir, rename } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { inc, valid } from "semver";
 import { numericVersion } from "./command.js";
@@ -8,9 +8,9 @@ import { releaseChangelog, nextChangelog } from "./changelog.js";
 import { matchingPublication } from "./package.js";
 import { semanticPlan } from "./semantic.js";
 import type {
-  Artifact, ArtifactContext, Changelog, ChangelogConfig, Command, HookContext, Log, PackagePublisher,
-  RegistryVerifier, ReleaseConfig, ReleaseHost, ReleaseIdentity, ReleaseState, ReleaseStore,
-  ReleaseValidator, Verification, VerificationOptions, VersionPolicy,
+  Artifact, ArtifactContext, Changelog, ChangelogFormat, Command, HookContext, Log, PackagePublisher,
+  RegistryVerifier, ReleaseHost, ReleaseIdentity, ReleaseState, ReleaseStore,
+  ReleaseValidator, ValidationHooks, Verification, VerificationOptions, VersionPolicy,
 } from "./contracts.js";
 
 export function verificationOptions(options: Partial<VerificationOptions> = {}): VerificationOptions {
@@ -39,18 +39,29 @@ export class NumericPatchVersions implements VersionPolicy {
   }
 }
 
-export class MarkdownChangelog implements Changelog {
-  constructor(readonly path: string, readonly config: ChangelogConfig) {}
+export abstract class MarkdownChangelog implements Changelog {
+  abstract readonly format: ChangelogFormat;
+  constructor(readonly path = "CHANGELOG.md") {}
 
-  async release(identity: { version: string; date: string }): Promise<string> {
-    const updated = releaseChangelog(await readFile(this.path, "utf8"), { ...this.config, ...identity });
-    await writeFile(this.path, updated.source);
+  async release(identity: { version: string; date: string; cwd?: string }): Promise<string> {
+    const path = resolve(identity.cwd || ".", this.path);
+    const updated = releaseChangelog(await readFile(path, "utf8"), { ...identity, format: this.format });
+    await writeFile(path, updated.source);
     return updated.notes;
   }
 
-  async next(identity: { version: string; releasedVersion: string }): Promise<void> {
-    await writeFile(this.path, nextChangelog(await readFile(this.path, "utf8"), { ...this.config, ...identity }));
+  async next(identity: { version: string; releasedVersion: string; cwd?: string }): Promise<void> {
+    const path = resolve(identity.cwd || ".", this.path);
+    await writeFile(path, nextChangelog(await readFile(path, "utf8"), { ...identity, format: this.format }));
   }
+}
+
+export class KeepAChangelog extends MarkdownChangelog {
+  readonly format = "keep-a-changelog";
+}
+
+export class IntrideaChangelog extends MarkdownChangelog {
+  readonly format = "intridea";
 }
 
 export class GitHubReleaseHost implements ReleaseHost {
@@ -117,16 +128,16 @@ interface HostedMetadata {
 }
 
 export class HookValidator implements ReleaseValidator {
-  constructor(readonly config: Pick<ReleaseConfig, "validate" | "validateArtifact"> = {}) {}
+  constructor(readonly hooks: ValidationHooks = {}) {}
 
   async validate(context: HookContext): Promise<void> {
-    if (this.config.validate) return this.config.validate(context);
+    if (this.hooks.validate) return this.hooks.validate(context);
     await context.run("npm", ["test"]);
     await context.run("npm", ["run", "lint"]);
   }
 
   async artifact(context: ArtifactContext): Promise<void> {
-    await this.config.validateArtifact?.(context);
+    await this.hooks.validateArtifact?.(context);
   }
 }
 
@@ -153,7 +164,10 @@ export class DirectoryReleaseStore implements ReleaseStore {
 }
 
 export class RegistryVisibility implements RegistryVerifier {
-  constructor(readonly publisher: PackagePublisher) {}
+  readonly options: VerificationOptions;
+  constructor(readonly publisher: PackagePublisher, options: Partial<VerificationOptions> = {}) {
+    this.options = verificationOptions(options);
+  }
 
   async verify(state: ReleaseIdentity & { readonly artifact: Artifact },
     options: VerificationOptions, log: Log): Promise<Verification> {

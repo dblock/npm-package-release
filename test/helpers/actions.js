@@ -33,8 +33,8 @@ export async function checkActions(t, archive) {
     });
     await writeFile(join(fixture.cwd, "npr.config.js"),
       semantic ?
-        'import { SemanticReleaseWorkflow } from "npm-package-release"; export default new SemanticReleaseWorkflow({ verification: { attempts: 2, delay: 0 } });\n' :
-        'export default { changelog: { format: "intridea" }, verification: { attempts: 2, delay: 0 } };\n');
+        'import { SemanticReleaseWorkflow } from "npm-package-release"; export default new SemanticReleaseWorkflow();\n' :
+        'import { ReleaseWorkflow, IntrideaChangelog } from "npm-package-release"; export default new ReleaseWorkflow({ changelog: new IntrideaChangelog() });\n');
     await fixture.git("add", ".");
     await fixture.git("commit", "-m", "feat: install release tooling");
     await fixture.git("push", "origin", "master");

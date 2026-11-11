@@ -67,21 +67,17 @@ export interface ArtifactContext extends HookContext {
   readonly archive: string;
   readonly consumer: string;
 }
-export interface ChangelogConfig {
-  readonly format: "intridea" | "keep-a-changelog";
-  readonly path?: string;
-}
-export interface ReleaseConfig {
+export type ChangelogFormat = "intridea" | "keep-a-changelog";
+export interface ReleaseConfig extends Partial<ReleaseServices> {
   readonly observer?: WorkflowObserver;
-  readonly changelog: ChangelogConfig | null;
+  readonly provider?: ExecutionProvider;
   readonly branch?: string;
   readonly remote?: string;
-  readonly repository?: string;
-  readonly github?: boolean;
   readonly timezone?: string;
-  readonly verification?: Partial<VerificationOptions>;
   readonly prepare?: (context: HookContext) => Promise<void>;
   readonly next?: (context: HookContext) => Promise<void>;
+}
+export interface ValidationHooks {
   readonly validate?: (context: HookContext) => Promise<void>;
   readonly validateArtifact?: (context: ArtifactContext) => Promise<void>;
 }
@@ -135,8 +131,8 @@ export interface PackagePublisher {
   publish(archive: string): Promise<void>;
 }
 export interface Changelog {
-  release(identity: { readonly version: string; readonly date: string }): Promise<string>;
-  next(identity: { readonly version: string; readonly releasedVersion: string }): Promise<void>;
+  release(identity: { readonly version: string; readonly date: string; readonly cwd?: string }): Promise<string>;
+  next(identity: { readonly version: string; readonly releasedVersion: string; readonly cwd?: string }): Promise<void>;
 }
 export interface VersionPolicy {
   select(current: string, requested?: string): { readonly version: string; readonly nextVersion: string };
@@ -155,6 +151,7 @@ export interface ReleaseStore {
   save(state: ReleaseState): Promise<void>;
 }
 export interface RegistryVerifier {
+  readonly options?: VerificationOptions;
   verify(state: ReleaseIdentity & { readonly artifact: Artifact },
     options: VerificationOptions, log: Log): Promise<Verification>;
 }

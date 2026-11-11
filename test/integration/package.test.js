@@ -11,7 +11,7 @@ import { checkCli } from "../helpers/cli.js";
 import { releaseFixture } from "../helpers/release-fixture.js";
 import { checkActions } from "../helpers/actions.js";
 import { command } from "../../dist/command.js";
-import { checkComposition } from "../helpers/composition.js";
+import { checkComposition, checkDefaultChangelog } from "../helpers/composition.js";
 import { checkSemanticRelease } from "../helpers/semantic.js";
 import { checkSelfRelease } from "../helpers/self-release.js";
 
@@ -77,11 +77,12 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   checkCli((args) => npm(["exec", "--silent", "--offline", "--", "npr", ...args], consumer));
   const installedApi = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/dist/index.js")).href);
   await checkComposition(t, installedApi);
+  await checkDefaultChangelog(t, installedApi);
   await checkSemanticRelease(t, installedApi);
   await checkSelfRelease(t, join(consumer, "node_modules/npm-package-release"));
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, complete, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, complete, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator } from "npm-package-release";
 import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, CheckpointWorkflow } from "npm-package-release";
 class Inspect implements Step<PreparedRelease, PreparedRelease> {
   readonly id = "inspect";
@@ -103,6 +104,14 @@ export async function staged(options: ReleaseOptions) {
 }
 export const semantic = new SemanticReleaseWorkflow({ nextDevelopment: false });
 semantic satisfies CheckpointWorkflow;
+new ReleaseWorkflow({ changelog: new KeepAChangelog("docs/HISTORY.md"), validator: new HookValidator() });
+new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
+// @ts-expect-error Format objects are not changelog implementations.
+new ReleaseWorkflow({ changelog: { format: "intridea" } });
+// @ts-expect-error Release calls require workflow instances.
+release({ changelog: null });
+// @ts-expect-error Hosting uses service instances rather than flags.
+new ReleaseWorkflow({ github: false });
 Workflow.start<ReleaseOptions>().then(new AnalyzeSemanticRelease()).then(new InitializeSemanticRelease());
 // @ts-expect-error A semantic initializer needs an immutable analyzed decision.
 Workflow.start<ReleaseOptions>().then(new InitializeSemanticRelease());
@@ -117,7 +126,7 @@ flow.then(new PublishArtifact());
   }));
   await command(process.execPath, [join(root, "node_modules/typescript/bin/tsc"), "--project", consumer]);
   const fixture = await releaseFixture(t);
-  await fixture.assertReleased(await installedApi.release(fixture.config, fixture));
+  await fixture.assertReleased(await installedApi.release(new installedApi.ReleaseWorkflow(fixture.config), fixture));
   const { NpmPackage } = installedApi;
   const publicRegistry = new NpmPackage(consumer, (program, args, options) =>
     command(program, args, { cwd: consumer, ...options }));
