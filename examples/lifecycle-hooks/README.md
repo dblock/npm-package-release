@@ -14,6 +14,6 @@ Keep the [changelog](CHANGELOG.md) with meaningful notes and the configured prom
 
 ## Tests
 
-Run `node --test examples/lifecycle-hooks/release.test.js` from this repository or the installed package directory. The tests import the same workflow builder, copy real project files with an explicit file list, and supply local publication/hosting services from `npm-package-release/testing`.
+Run `node --test examples/lifecycle-hooks/release.test.js` from this repository or the installed package directory. The tests import the same workflow builder, recursively copy the real example files without Git metadata, and supply local publication/hosting services from `npm-package-release/testing`. Their focused fixture test command runs only `check.js`, not the copied release spec.
 
 The fixture's Git remote and archives are temporary and are cleaned up after each test. The tests cover the release-tag README, next-development README/categories, exact installed archive, failed publication, and repeated checkpoint completion. Test adapters are explicit replacements, not a sandbox for arbitrary custom callbacks. See [Testing Custom Workflows](../../docs/testing.md).

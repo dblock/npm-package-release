@@ -16,6 +16,7 @@ import { checkSemanticRelease } from "../helpers/semantic.js";
 import { checkSelfRelease } from "../helpers/self-release.js";
 import { checkLifecycle } from "../helpers/lifecycle.js";
 import { checkMarkdownSection, checkMarkdownSubstitutions } from "../helpers/markdown.js";
+import { checkRecursiveCopying, checkGitMetadataCopying, checkGlobCopying } from "../helpers/testing.js";
 
 test("the actual tarball installs with strict engines and exposes its API and CLI", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "npm-package-release-consumer-"));
@@ -85,6 +86,10 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   assert.match(imported.stdout, /^\d+\.\d+\.\d+$/u);
   checkCli((args) => npm(["exec", "--silent", "--offline", "--", "npr", ...args], consumer));
   const installedApi = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/dist/index.js")).href);
+  const installedTestingApi = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/dist/testing.js")).href);
+  await checkRecursiveCopying(t, installedTestingApi);
+  await checkGitMetadataCopying(t, installedTestingApi);
+  await checkGlobCopying(t, installedTestingApi);
   await command(process.execPath, [
     "--test", join(consumer, "node_modules/npm-package-release/examples/lifecycle-hooks/release.test.js"),
   ], { cwd: consumer });
@@ -103,10 +108,16 @@ import { ReleaseTestProject, TestPublisher, TestReleaseHost } from "npm-package-
 export async function testProjectContracts() {
   const project = await ReleaseTestProject.create();
   new ReleaseWorkflow(project.services);
+  await project.copyFiles(".");
+  await project.copyFiles(".", []);
+  await project.copyFiles(".", "**/*.{js,md}");
+  await project.copyFiles(".", "README.md");
   await project.copyFiles(".", ["README.md"]);
   await project.dispose();
-  // @ts-expect-error Fixture copies require an explicit file list.
-  await project.copyFiles(".", "README.md");
+  // @ts-expect-error File selections must be glob strings or arrays.
+  await project.copyFiles(".", 123);
+  // @ts-expect-error Omit the list for recursion rather than passing null.
+  await project.copyFiles(".", null);
   new TestPublisher(".");
   new TestReleaseHost(".");
 }

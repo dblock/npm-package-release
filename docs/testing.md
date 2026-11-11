@@ -36,7 +36,7 @@ See the [complete lifecycle example](../examples/lifecycle-hooks/README.md) and 
 | Member | Behavior |
 | --- | --- |
 | `write(path, content)` | Write a relative text file inside the fixture, creating parent directories. |
-| `copyFiles(root, paths)` | Copy only the listed relative regular files, preserving nested paths and permission bits. |
+| `copyFiles(root, selection?)` | Copy all files recursively, a glob's matches, or an exact list of relative files, preserving nested paths, bytes, and permission bits. |
 | `commit(message?)` | Commit fixture changes and push them to the local `master` branch. |
 | `git(...args)` | Run real Git commands in the fixture. |
 | `remoteFile(ref, path)` | Read a file from a tag or branch in the bare remote. |
@@ -44,7 +44,22 @@ See the [complete lifecycle example](../examples/lifecycle-hooks/README.md) and 
 | `options` | Release invocation options with fixture paths, environment, runner, and silent logging. |
 | `services` | Explicit local publisher, host, and execution-provider overrides for your real builder. |
 
-`copyFiles` validates every source and destination before copying any file. Absolute paths, parent traversal, missing files, directories, and escaping or dangling symbolic links fail. Links that resolve inside their respective roots are allowed. Preflight validation is not an atomic filesystem transaction or a defense against concurrent hostile mutations.
+Omit `selection` to copy a whole project, pass a glob string to select matches, or use an array for exact file paths. Pass `[]` to copy nothing:
+
+```js
+export async function copyProject(project, sourceRoot) {
+  await project.copyFiles(sourceRoot);
+  await project.copyFiles(sourceRoot, "**/*.{js,md}");
+  await project.copyFiles(sourceRoot, ["README.md", "scripts/release.js"]);
+  await project.copyFiles(sourceRoot, []);
+}
+```
+
+Glob strings support wildcards, recursive `**`, character classes, and brace alternatives. Use `/` as the separator on every platform; matches include hidden files and directories. No matches copy nothing. Arrays are always literal file paths, even when a filename contains glob characters.
+
+Recursive and glob copying skip `.git` files and directories at every level, preserving the fixture's isolated repository. They do not apply Git ignore rules or exclude dependencies/build outputs; select files explicitly or with a glob when those files are not wanted.
+
+`copyFiles` validates every selected source and destination before copying any file. Absolute paths, parent traversal, missing explicit files, explicit directories, Git metadata in exact file lists, metadata aliases, and escaping or dangling symbolic links fail. File links that resolve inside their respective roots are allowed unless they target Git metadata; directory links are not traversed and selected directory links fail regular-file validation. Preflight validation is not an atomic filesystem transaction or a defense against concurrent hostile mutations.
 
 Child commands retain runtime paths and platform essentials, but clear inherited credentials, Actions state, npm settings, Git overrides, and outer release state. HOME, npm configuration, and npm cache are private to the fixture; system Git configuration is disabled and global Git configuration starts in a private empty regular file. Your package tests still run when configured, so use a focused fixture test command rather than recursively running the release spec itself.
 
