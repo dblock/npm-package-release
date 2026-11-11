@@ -1,5 +1,7 @@
 # Lifecycle Hooks
 
+For release-managed README content, use [MarkdownSection](markdown.md) inside trusted prepare/next hooks rather than regular-expression replacements.
+
 Both `ReleaseWorkflow` and `SemanticReleaseWorkflow` accept an immutable `LifecycleHooks` instance. Add ordered behavior without replacing the release sequence or its service classes:
 
 ```js

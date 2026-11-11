@@ -94,7 +94,7 @@ See [Detailed Usage](docs/usage.md) for CLI/API commands and defaults; [Changelo
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Changelog Templates](docs/changelogs.md), [Lifecycle Hooks](docs/hooks.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Checkpoints and Reconciliation](docs/checkpoints.md), and [Semantic Releases](docs/semantic.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Changelog Templates](docs/changelogs.md), [Updating Markdown Sections](docs/markdown.md), [Lifecycle Hooks](docs/hooks.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Checkpoints and Reconciliation](docs/checkpoints.md), and [Semantic Releases](docs/semantic.md).
 
 ## License
 
