@@ -71,8 +71,14 @@ new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
 new KeepAChangelog("CHANGELOG.md", { placeholder: "* Contribute.", sections: ["Added", "Fixed"] });
 new IntrideaChangelog("CHANGELOG.md", { placeholder: "* Contribute." });
 new MarkdownSection("README.md", "## Stable").replace("New.", { cwd: "." });
+new MarkdownSection("README.md", "## Stable").replace("Old.", "New.");
+new MarkdownSection("README.md", "## Stable").replace(/version (\S+)/gu, "release $1", { cwd: "." });
 // @ts-expect-error Markdown section bodies must be strings.
 new MarkdownSection("README.md", "## Stable").replace(123);
+// @ts-expect-error A regular expression requires replacement text.
+new MarkdownSection("README.md", "## Stable").replace(/Old/u);
+// @ts-expect-error Substitution text must be a string.
+new MarkdownSection("README.md", "## Stable").replace(/Old/u, () => "New.");
 // @ts-expect-error Template sections are an array of names.
 new KeepAChangelog("CHANGELOG.md", { sections: "Added" });
 // @ts-expect-error Intridea always requires a contribution placeholder.

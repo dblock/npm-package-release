@@ -16,7 +16,7 @@ Keep lifecycle hook registries immutable and invocation failures isolated. Prepa
 
 Keep changelog templates on class instances, preserving Keep a Changelog defaults. Strip prompts only outside opaque Markdown examples, reject prompt-only notes before writing, preserve references/source offsets, and restore only the intended category template. Intridea accepts multiple prompts and carries one-level headings into development; see [Changelog Templates](docs/changelogs.md).
 
-Use the shared Markdown parser for section edits, not regular expressions over whole documents. Preserve exact-heading checks, source offsets, surrounding content, newline style, and pre-write validation; see [Updating Markdown Sections](docs/markdown.md).
+Use the shared Markdown parser for section edits, not regular expressions over whole documents. Keep both `replace(body, options)` and section-scoped `replace(search, replacement, options)` on `MarkdownSection`. Preserve exact-heading checks, source offsets, surrounding content, newline style, and pre-write validation; see [Updating Markdown Sections](docs/markdown.md).
 
 Keep the public testing API on the optional `npm-package-release/testing` subpath with no test-framework dependency. Preserve owned temporary cleanup, isolated inherited environments, local remotes/publication, exact-byte reconciliation, and all-files-before-copy preflight with canonical symlink boundaries. Exercise the real packaged lifecycle builder/spec, not a duplicated test configuration. Explicit adapters are not a sandbox for custom commands; see [Testing Custom Workflows](docs/testing.md).
 
