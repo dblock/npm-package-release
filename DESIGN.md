@@ -42,6 +42,8 @@ After publication, verify archive integrity, atomically push the release commit 
 
 ## Changelog Boundaries
 
+Changelogs and `MarkdownSection` share one mdast parser and top-level section boundary implementation. Section editing requires an exact heading line, preserves surrounding source, rejects ambiguous headings/line endings, and leaves project-specific wording in trusted hooks; see [Updating Markdown Sections](docs/markdown.md).
+
 Parse Markdown to identify top-level ATX headings, contribution prompts, actual release notes, and comparison definitions. Exclude headings, HTML/comments, definitions, and thematic breaks from meaningful notes; do not borrow historical notes. Code and described images count as actual content. Update original source slices rather than rendering an AST; preserve unrelated Markdown, Unicode offsets, and CRLF. Intridea removes every matching prompt and restores one-level category headings for development. Keep a Changelog preserves existing defaults, with optional prompt cleanup and explicit category templates; retain standard Unreleased comparison links and reject unsupported or duplicate definitions. See [Changelog Templates](docs/changelogs.md).
 
 ## Semantic Releases

@@ -15,4 +15,5 @@
 - [#12](https://github.com/dblock/npm-package-release/pull/12): Add an original npm-inspired box-and-arrow logo with editable artwork and packaged README assets - [@dblock](https://github.com/dblock).
 - [#13](https://github.com/dblock/npm-package-release/pull/13): Reuse the release workflow for this library's own checkout SDK with optional tooling builds, durable prepublication checkpoints, and documented setup/recovery - [@dblock](https://github.com/dblock).
 - [#14](https://github.com/dblock/npm-package-release/pull/14): Support categorized Intridea notes and opt-in Keep a Changelog contribution templates with safe prompt/category cleanup - [@dblock](https://github.com/dblock).
+- [#15](https://github.com/dblock/npm-package-release/pull/15): Add source-preserving Markdown section updates with exact-heading validation for release-managed documentation - [@dblock](https://github.com/dblock).
 - Your contribution here.
