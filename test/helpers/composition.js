@@ -3,6 +3,25 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { releaseFixture } from "./release-fixture.js";
 
+export async function checkDefaultChangelog(t, api) {
+  const fixture = await releaseFixture(t);
+  const path = join(fixture.cwd, "CHANGELOG.md");
+  await writeFile(path, "# Changelog\n\n## [Unreleased]\n\n- Ship a package.\n");
+  await fixture.git("add", "CHANGELOG.md");
+  await fixture.git("commit", "-m", "Use Keep a Changelog");
+  await fixture.git("push", "origin", "master");
+  const config = { ...fixture.config };
+  delete config.changelog;
+  const workflow = new api.ReleaseWorkflow(config);
+  const built = await workflow.prepare(fixture);
+  assert.ok(built.runtime.services.changelog instanceof api.KeepAChangelog);
+  assert.match(await readFile(path, "utf8"), /## \[0\.1\.0\] - \d{4}-\d{2}-\d{2}/u);
+  await workflow.complete(fixture);
+  await workflow.complete(fixture);
+  assert.equal(fixture.published.length, 1);
+  assert.match(await readFile(path, "utf8"), /## \[Unreleased\]\n\n## \[0\.1\.0\]/u);
+}
+
 export async function checkComposition(t, api) {
   const fixture = await releaseFixture(t);
   const snapshots = [];
@@ -34,7 +53,7 @@ export async function checkComposition(t, api) {
       await context.run("npm", ["run", "lint"]);
     }
     async artifact(context) {
-      await fixture.config.validateArtifact(context);
+      await fixture.config.validator.artifact(context);
     }
   }
   class ProjectHost {
@@ -81,11 +100,10 @@ export async function checkComposition(t, api) {
   const publisher = new ProjectPublisher();
   const workflow = api.Workflow.start(new api.ReleaseObserver())
     .then(new api.InitializeRelease({
-      ...fixture.config, changelog: null, repository: "not-a-github-repository",
-      async validate() { assert.fail("The class validator must replace the legacy hook"); },
-    }, {
+      ...fixture.config,
       changelog: new ProjectNotes(), versions: new NextMinor(),
       validator: new ProjectChecks(), host: new ProjectHost(), publisher,
+      verifier: new api.RegistryVisibility(publisher, { attempts: 3, delay: 0 }),
     }))
     .then(new api.PrepareRelease())
     .then(new api.ValidateRelease())

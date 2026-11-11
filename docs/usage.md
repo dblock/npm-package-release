@@ -4,7 +4,37 @@
 
 The default workflow uses one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Built-in services do not support alternate registries, prerelease versions/channels, or workspace publication; [custom workflows](workflows.md) can supply their own classes and contracts.
 
-The package has not been published yet. Until its first release, build/install its local tarball using [CONTRIBUTING](../CONTRIBUTING.md#setup-and-validation). After publication, install `npm-package-release` as a development dependency, not the unrelated npm package `npr`. Prefer an exact reviewed version and commit the lockfile.
+Install `npm-package-release@0.1.0` as an exact development dependency and commit the lockfile. The CLI is `npr`, not the unrelated npm package of that name. Upgrade the dependency and pinned workflow/action together.
+
+## New Project Setup
+
+Follow the [four-step README setup](../README.md#usage) in **your package's repository**, not this tool's repository. Install the tool in locked development dependencies, export the configuration, and merge the calling workflow into your default branch.
+
+### First Publication
+
+An unpublished npm package needs a manual first publication before configuring its Trusted Publisher. Existing packages skip this step.
+
+Review the initial release metadata through your normal PR process: synchronize manifest/lockfile versions (for example `0.1.0`), date the changelog heading, and remove its placeholder. From the clean merged commit, run tests/lint, build with `npm pack --json`, inspect the archive/checksums, and test that exact archive in an isolated consumer with strict engines and lifecycle scripts disabled.
+
+With publication approval, authenticate interactively using `npm login` when needed, then publish the tested archive:
+
+```sh
+npm publish /absolute/path/to/package.tgz --access public --ignore-scripts
+```
+
+Verify `npm view YOUR_PACKAGE@0.1.0 --json` matches the retained archive's name/version, `dist.integrity`, and `dist.shasum`. With tag/hosted-release approval, create the matching immutable tag at the release commit and a GitHub Release with those notes/archive. Never rebuild or overwrite existing outputs. For the next release, update manifest/lockfile/changelog together or pass an unpublished version in the dispatch input.
+
+### Environment and Branch Permissions
+
+Create `release` under your GitHub repository's **Settings → Environments**. Restrict it to your default branch and optionally require maintainer approval where supported. An unprotected environment alone does not restrict who can publish.
+
+The workflow pushes release and next-development commits directly. An authorized administrator must allow fast-forward default-branch pushes and release-tag creation. Removing a blocking PR requirement permits direct pushes by **all writers**, not only Actions; retain force-push/deletion protections with no bypass actors and keep ordinary development on PRs. The tool does not change protections itself.
+
+### Publisher Checks
+
+Use the [exact npm publisher fields in README](../README.md#3-enable-trusted-publishing): your owner/repository, calling filename `release.yml`, environment `release`, and direct `npm publish` permission. Fields are case-sensitive; use the actual filename if renamed. npm checks the caller even when it invokes a reusable workflow. Do not store an npm publish token or set `NODE_AUTH_TOKEN`; `GH_TOKEN` is a separate GitHub job token supplied by the reusable workflow.
+
+New publishers [expire without a successful publication within two days](https://docs.npmjs.com/trusted-publishers/); expired configurations must be recreated by an authorized maintainer. For authentication failures, also check both workflow permissions, GitHub-hosted execution, and supported Node/npm. `npm whoami` is not an OIDC permission test. Inspect [recovery evidence](#recovery) before repeating a failed dispatch.
 
 ## CLI
 
@@ -47,67 +77,69 @@ Representative release output:
 
 ## Configuration
 
-Configuration is trusted JavaScript executed with release privileges, not untrusted data. Export a [composed workflow](workflows.md), `new ReleaseWorkflow(config, services)`, or a compatible configuration object as shown below. The object form is adapted to the default class-based workflow. All hooks are optional; hook failures stop the sequence. Choose a changelog format explicitly or use `changelog: null` to delegate release-note maintenance to your own steps or changelog service.
+Configuration is trusted JavaScript executed with release privileges, not untrusted data. Export a [composed workflow instance](workflows.md) or `new ReleaseWorkflow(options)` as shown below. Plain-object exports and format/hosting/validation selector options are not supported. Supply service instances directly; `KeepAChangelog` is the default, and `changelog: null` delegates notes to your own steps.
 
 ```js
-export default {
-  changelog: { format: "intridea", path: "CHANGELOG.md" },
+import { KeepAChangelog, HookValidator, ReleaseWorkflow } from "npm-package-release";
+
+export default new ReleaseWorkflow({
+  changelog: new KeepAChangelog("CHANGELOG.md"),
   timezone: "UTC",
-  async validate({ run }) {
-    await run("npm", ["test"]);
-    await run("npm", ["run", "lint"]);
-  },
-  async validateArtifact({ consumer, run }) {
-    await run("node", ["--input-type=module", "--eval", 'import("example")'], {
-      cwd: consumer,
-    });
-  },
-};
+  validator: new HookValidator({
+    async validateArtifact({ consumer, run }) {
+      await run("node", ["--input-type=module", "--eval", 'import("example")'], {
+        cwd: consumer,
+      });
+    },
+  }),
+});
 ```
 
 Replace `example` with the package's public API and check its actual behavior. The built-in consumer always installs the exact archive with strict engines and lifecycle scripts disabled; `validateArtifact` runs inside that consumer before publication, without rebuilding.
 
 | Option | Default | Behavior |
 | --- | --- | --- |
-| `changelog` | Required | `{ format: "intridea" }`, `{ format: "keep-a-changelog" }`, or explicit `null`; path defaults to `CHANGELOG.md`. |
+| `changelog` | `new KeepAChangelog()` | `new KeepAChangelog(path)`, `new IntrideaChangelog(path)`, a custom `Changelog`, or `null`. Paths default to `CHANGELOG.md` and resolve relative to the invocation's `cwd`. |
 | `branch` | Actions default branch or remote symbolic HEAD | Must match the checked-out branch and current remote tip. |
 | `remote` | `origin` | Named Git remote, used for concurrency checks and atomic pushes. |
-| `repository` | GitHub HTTPS URL in manifest metadata | Explicit `owner/repository` for GitHub Release creation. |
-| `github` | `true` | Set `false` to disable hosted-release creation, not package publication. |
+| `repository` | `Git` | A `ReleaseRepository` instance; default Git uses `branch`/`remote`. |
+| `host` | `GitHubReleaseHost` | A `ReleaseHost` instance or `null` to disable hosting. Default GitHub owner/repository comes from the manifest's HTTPS repository URL. |
 | `timezone` | `NPR_TIMEZONE` or `UTC` | Named timezone for calendar dates and command/Git timestamps. |
 | `prepare` | No additional edits | Trusted release edits after version/changelog preparation. |
-| `validate` | `npm test`, then `npm run lint` | Runs for release and next-development files; must not modify tracked/non-ignored files or the index. |
-| `validateArtifact` | Strict consumer installation only | Check installed public behavior using `consumer` and the retained `archive`. |
+| `validator` | `new HookValidator()` | A `ReleaseValidator` instance. `HookValidator({ validate, validateArtifact })` adapts optional checks; default validation runs npm tests/lint for release and next-development files. |
 | `next` | No additional edits | Trusted next-development edits after the patch increment. |
-| `verification` | `{ attempts: 6, delay: 10000 }` | Fresh registry lookups; at most 60 attempts, with delay between 0 and 60000 milliseconds. |
+| `verifier` | `RegistryVisibility` | A `RegistryVerifier` instance. `new RegistryVisibility(publisher, { attempts: 6, delay: 10000 })` configures bounded lookups; at most 60 attempts and delay up to 60000 milliseconds. Captured settings are retained for completion. |
+| `versions` | `NumericPatchVersions` | A `VersionPolicy` instance selecting the release and next-development versions. |
+| `project`, `publisher`, `store` | Built-in npm project/publisher and directory store | Instances implementing the [service contracts](workflows.md#replace-services). |
+| `provider` | Scoped local/GitHub detection | An `ExecutionProvider` instance; per-run selection takes precedence. |
 
 Hooks receive a frozen context with `cwd`, `version`, `releasedVersion`, `previousVersion`, `date` (`YYYY-MM-DD`), `phase`, and `run(program, argumentArray, options)`. Artifact hooks additionally receive `archive` and `consumer`. Next hooks/validation see the development version as `version` and an empty `PACKAGE_ARCHIVE` in command environments. `run` returns standard output, rejects nonzero exits, defaults to a 120-second timeout, and accepts `cwd`, `env`, and `timeout` overrides. npm lookups use a shorter timeout and disable fetch retries; only explicit missing-version responses are retried.
 
 Hooks also receive `execution`, a provider-neutral immutable snapshot with release data, the logical step, observed history, and allowlisted run metadata. A configuration `observer` class supplies structured success/failure notifications, including failures before initialization. See [Execution Providers and Contexts](execution.md).
 
-For Intridea, use `## 0.1.0 (Next)` with real notes and exactly one `- Your contribution here.` placeholder. Releases use `## 0.1.0 (YYYY/MM/DD)`. For Keep a Changelog, use `## [Unreleased]` with real notes; releases use `## [0.1.0] - YYYY-MM-DD`. Standard `[Unreleased]: https://github.com/owner/repo/compare/v0.0.1...master` links are updated without rewriting unrelated Markdown. Empty sections fail before publication.
+For the default `KeepAChangelog`, use `## [Unreleased]` with real notes; releases use `## [0.1.0] - YYYY-MM-DD`. Standard `[Unreleased]: https://github.com/owner/repo/compare/v0.0.1...master` links are updated without rewriting unrelated Markdown. `new IntrideaChangelog()` instead uses `## 0.1.0 (Next)` with real notes and exactly one `- Your contribution here.` placeholder; releases use `## 0.1.0 (YYYY/MM/DD)`. Empty sections fail before publication. Custom `Changelog.release`/`next` methods receive the invocation's `cwd` alongside version/date data.
 
 ## JavaScript API
 
 ```js
 import { release, verify } from "npm-package-release";
-import config from "./npr.config.js";
+import workflow from "./npr.config.js";
 
-await release(config, { version: "1.2.3" });
+await release(workflow, { version: "1.2.3" });
 await verify();
 ```
 
-The default release and verification return retained state snapshots. A custom workflow returns its final step's output. Options include `cwd`, `artifacts`, `log`, scoped `env`, and an argument-based asynchronous `run` executor (default: public system commands). Alternate executors support isolated integrations; they are trusted code. `releaseChangelog(source, { format, version, date })` returns `{ source, notes }`; `nextChangelog(source, { format, version, releasedVersion })` returns the next source text. These pure functions do not write files. Public TypeScript declarations include step, context, service, and workflow contracts without requiring TypeScript at runtime.
+The default release and verification return retained state snapshots. A custom workflow returns its final step's output. The release API requires a workflow instance; there is no configuration-object adapter. Options include `cwd`, `artifacts`, `log`, scoped `env`, and an argument-based asynchronous `run` executor (default: public system commands). Alternate executors support isolated integrations; they are trusted code. `releaseChangelog(source, { format, version, date })` returns `{ source, notes }`; `nextChangelog(source, { format, version, releasedVersion })` returns the next source text. These pure Markdown functions retain an explicit format argument; it is not a workflow option. Public TypeScript declarations include step, context, service, and workflow contracts without requiring TypeScript at runtime.
 
 ## GitHub Actions
 
-Copy [the caller example](../examples/release.yml) to the consumer's `.github/workflows/release.yml`. It uses `workflow_dispatch`, grants `contents: write` and `id-token: write`, and calls this repository's reusable `release.yml`. The example currently references `master` because no release tag exists yet; pin a reviewed commit now and a reviewed immutable release tag when available. Keep `npm-package-release` installed in the caller's locked development dependencies.
+Copy [the caller example](../examples/release.yml) to the consumer's `.github/workflows/release.yml`. It uses `workflow_dispatch`, grants `contents: write` and `id-token: write`, and calls this repository's reusable `release.yml` at `v0.1.0`. Keep `npm-package-release@0.1.0` installed in the caller's locked development dependencies.
 
 The reusable workflow accepts `node-version` (26), `npm-version` (12), `config` (`npr.config.js`), optional `version`, and `timezone` (UTC). Runtime/tooling versions must be compatible with each other and the caller's package. It runs only for manual dispatch on the default branch, uses the `release` environment and repository-level concurrency, installs dependencies without caching, configures Git identity, prepares the release, requires a successful checkpoint upload, then completes publication. It always attempts a separate diagnostic-artifact upload.
 
-For step-based integration, adapt the [composite caller example](../examples/action-release.yml), using `dblock/npm-package-release@<reviewed-commit>` after checking out the attached default branch with full history, setting up compatible Node/npm, installing dependencies, and configuring Git identity. Its inputs are `config`, optional `version`, and `timezone`. The caller must supply manual-dispatch/default-branch guards, the `release` environment, contents/OIDC permissions, and non-canceling release concurrency; the composite action uses the same upload-gated handoff and failure-aware diagnostic upload. It does not configure repository protections or npm credentials. Run-only custom workflow classes must implement the staged contract before using either Actions interface.
+For step-based integration, adapt the [composite caller example](../examples/action-release.yml), using `dblock/npm-package-release@v0.1.0` after checking out the attached default branch with full history, setting up compatible Node/npm, installing dependencies, and configuring Git identity. Its inputs are `config`, optional `version`, and `timezone`. The caller must supply manual-dispatch/default-branch guards, the `release` environment, contents/OIDC permissions, and non-canceling release concurrency; the composite action uses the same upload-gated handoff and failure-aware diagnostic upload. It does not configure repository protections or npm credentials. Both Actions interfaces require a workflow instance implementing prepare/complete.
 
-Existing packages need an authorized npm Trusted Publisher for the calling repository, caller workflow filename `release.yml`, environment `release`, and direct `npm publish` permission. npm validates the calling workflow filename even when publication happens in a reusable workflow. Initial publication is manual before configuring Trusted Publishing; see [RELEASING](../RELEASING.md#subsequent-trusted-publishing). Do not use `npm whoami` as an OIDC permission check or store long-lived publish tokens.
+Follow [New Project Setup](#new-project-setup) for the manual first-publication bootstrap, GitHub environment and branch rules, exact npm Trusted Publisher fields, and dispatch/verification. Existing packages skip only the bootstrap publication. [RELEASING](../RELEASING.md) instead describes maintaining this tool's own package, not setting up your consumer project.
 
 Release commits and tags require direct-push permission on the default branch. Configure that only with explicit authorization, retaining force-push/deletion protections and recognizing that removing a PR requirement permits direct pushes by all writers, not only this workflow. The tool does not change repository protections itself.
 

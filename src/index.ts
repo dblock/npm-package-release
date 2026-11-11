@@ -18,7 +18,8 @@ export type {
 export { Git } from "./git.js";
 export { NpmPackage } from "./package.js";
 export {
-  NumericPatchVersions, MarkdownChangelog, GitHubReleaseHost, HookValidator, DirectoryReleaseStore, RegistryVisibility,
+  NumericPatchVersions, MarkdownChangelog, KeepAChangelog, IntrideaChangelog,
+  GitHubReleaseHost, HookValidator, DirectoryReleaseStore, RegistryVisibility,
 } from "./services.js";
 export {
   InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, PublishArtifact,

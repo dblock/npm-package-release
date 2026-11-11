@@ -31,7 +31,7 @@ class CheckArchiveSize {
   }
 }
 
-const config = { changelog: { format: "intridea" } };
+const config = {};
 const preparation = Workflow.start(new ReleaseObserver())
   .then(new InitializeRelease(config))
   .then(new PrepareRelease())
@@ -66,20 +66,20 @@ In TypeScript, declare `class CheckArchiveSize implements Step<BuiltRelease, Bui
 
 The outer class implements `Step<ReleaseOptions, ReleaseState>` and `CheckpointWorkflow<BuiltRelease, ReleaseState>`. Its explicit methods let Actions upload the checkpoint before publication. Custom classes own observer forwarding: reserve release-success notifications for completion, not preparation. `ReleaseWorkflow` supplies that behavior by default. Local run-only compositions remain supported with `npr release`.
 
-Export `new ReleaseWorkflow(config, services, provider?)` to use the standard sequence without listing every step. `await release(workflow, options)` and `await workflow.run(options)` execute a composed workflow; the return type is the final step's output. Options include `cwd`, `version`, `artifacts`, `run`, `log`, scoped `env`, `provider`, and `observer`. See [Execution Providers and Contexts](execution.md) for platform selection, run metadata, and lifecycle reporting.
+Export `new ReleaseWorkflow(options)` to use the standard sequence without listing every step. Supply service instances and an optional provider alongside runtime settings in that options object. `await release(workflow, options)` and `await workflow.run(options)` execute a composed workflow; the return type is the final step's output. Run options include `cwd`, `version`, `artifacts`, `run`, `log`, scoped `env`, `provider`, and `observer`. See [Execution Providers and Contexts](execution.md) for platform selection, run metadata, and lifecycle reporting.
 
 `SemanticReleaseWorkflow` adds replaceable history, analyzer, selector, and generated-note classes ahead of preparation, while keeping the same staged contract. Its defaults do not require a manual changelog or create a next-development commit. See [Semantic Releases](semantic.md) for typed analysis steps, service interfaces, rules, and immutable decisions.
 
 ## Replace Services
 
-`InitializeRelease(config, services)` and `ReleaseWorkflow(config, services)` accept instances implementing these contracts. Omitted services use the defaults; no inheritance or global registration is required.
+`InitializeRelease(options)` and `ReleaseWorkflow(options)` accept service instances directly in their options object. Omitted services use the defaults; no inheritance or global registration is required.
 
 | Service | Interface | Default |
 | --- | --- | --- |
 | `repository` | `ReleaseRepository` | `Git`, including trusted staging, concurrency guards, atomic release pushes, and ref verification. |
 | `project` | `PackageProject` | `NpmPackage`, including manifest/lockfile updates, packing, strict consumers, and archive checks. |
 | `publisher` | `PackagePublisher` | `NpmPackage`, including registry lookup, duplicate checks, and exact-archive publication. |
-| `changelog` | `Changelog` | `MarkdownChangelog`, or `null` to skip built-in notes. |
+| `changelog` | `Changelog` | `KeepAChangelog`; choose `IntrideaChangelog` or a custom class, or `null` to skip built-in notes. |
 | `versions` | `VersionPolicy` | `NumericPatchVersions`, selecting the requested/current version and the next patch. |
 | `host` | `ReleaseHost` | `GitHubReleaseHost`, or `null` to skip hosting. |
 | `validator` | `ReleaseValidator` | `HookValidator`, adapting validation hooks or running npm tests/lint. |
@@ -99,10 +99,7 @@ class NextMinorVersion {
   }
 }
 
-export default new ReleaseWorkflow(
-  { changelog: { format: "intridea" } },
-  { versions: new NextMinorVersion() },
-);
+export default new ReleaseWorkflow({ versions: new NextMinorVersion() });
 ```
 
 For TypeScript, implement `VersionPolicy`; use `Changelog`, `ReleaseHost`, or another public interface for other services. An explicitly supplied host replaces GitHub-specific construction, including GitHub repository inference. Publisher injection is independent of package building, and the default registry verifier uses that publisher. Existing npm-specific validation remains in `NpmPackage`; alternative behavior requires the corresponding custom classes, not merely a different URL.
@@ -119,4 +116,4 @@ Diagnostic state is read through the selected store. Built-in steps persist new 
 
 ## Compatibility
 
-Existing configuration objects, `release(config, options)`, hooks, and `npr release` remain supported through the default `ReleaseWorkflow`. Prepare/complete are additional commands; the configuration filename is unchanged. Actions configurations must now expose both staged methods (or use a configuration object/default `ReleaseWorkflow`); custom repositories add `restore` and `nextIteration`. Missing/different hosted asset checksums fail rather than overwriting old assets. TypeScript configuration modules must be compiled to ESM before passing their path to `--config`; the CLI does not install a loader or compiler. Consumers may continue writing JavaScript classes and `npr.config.js`.
+Configuration modules export workflow instances, not plain objects or service-selector descriptors. `release(workflow, options)` executes a class implementing `Step`; Actions additionally requires prepare/complete methods. Custom repositories implement `restore` and `nextIteration`. Missing/different hosted asset checksums fail rather than overwriting old assets. TypeScript configuration modules must be compiled to ESM before passing their path to `--config`; the CLI does not install a loader or compiler. Consumers can write JavaScript classes in `npr.config.js`.

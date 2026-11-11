@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
 import { command } from "../../dist/command.js";
+import { HookValidator, IntrideaChangelog, NpmPackage, RegistryVisibility } from "../../dist/index.js";
 
 export async function releaseFixture(t, settings = {}) {
   const directory = await mkdtemp(join(tmpdir(), "npr-release-test-"));
@@ -101,24 +102,25 @@ export async function releaseFixture(t, settings = {}) {
     }
     return await command(program, args, options);
   };
+  const env = {
+    ...process.env, GITHUB_ACTIONS: "false",
+    GITHUB_STEP_SUMMARY: join(directory, "summary.md"),
+  };
+  const publisher = new NpmPackage(cwd, (program, args, options) => run(program, args, { cwd, env, ...options }));
   const config = {
-    changelog: { format: "intridea" },
-    verification: { attempts: 3, delay: 0 },
+    changelog: new IntrideaChangelog(),
+    verifier: new RegistryVisibility(publisher, { attempts: 3, delay: 0 }),
     prepare: async ({ phase }) => { events.push(phase); },
     next: async ({ phase, run: exec }) => {
       events.push(phase);
       await exec(process.execPath, ["-e", 'if (process.env.PACKAGE_ARCHIVE !== "") throw new Error("Archive override leaked into next validation");']);
     },
-    validateArtifact: async ({ consumer, run: exec }) => {
+    validator: new HookValidator({ validateArtifact: async ({ consumer, run: exec }) => {
       events.push("consumer");
       await exec(process.execPath, ["--input-type=module", "--eval",
         'import { message } from "@npr-test/example"; if (message !== "A real packed consumer") throw new Error("Broken artifact");',
       ], { cwd: consumer });
-    },
-  };
-  const env = {
-    ...process.env, GITHUB_ACTIONS: "false",
-    GITHUB_STEP_SUMMARY: join(directory, "summary.md"),
+    } }),
   };
   const options = { cwd, artifacts, run, log: (message) => events.push(message), env };
   const state = async () => JSON.parse(await readFile(join(artifacts, "release.json"), "utf8"));

@@ -10,7 +10,7 @@ import { SemanticReleaseWorkflow } from "npm-package-release";
 export default new SemanticReleaseWorkflow();
 ```
 
-`npr prepare`, `npr complete`, and `npr release` use this workflow without new commands or flags. The ordinary `ReleaseWorkflow` and configuration-object adapter keep their existing numeric-version/manual-changelog behavior. Publication and authentication still require authorization; choosing a semantic workflow does not configure either.
+`npr prepare`, `npr complete`, and `npr release` use this workflow without new commands or flags. The ordinary `ReleaseWorkflow` uses numeric versions and defaults to `KeepAChangelog`; both require workflow-instance exports. Publication and authentication still require authorization; choosing a semantic workflow does not configure either.
 
 The semantic workflow analyzes commits before preparing project files, generates release notes, and uses the existing validation, exact-archive, checkpoint, publication, Git, hosting, and bounded verification steps. It neither requires nor edits `CHANGELOG.md` by default. Existing `prepare`, validation, artifact, observer, provider, and Git settings remain available, except the manual `changelog` configuration option.
 
@@ -49,10 +49,11 @@ class ProjectAnalyzer extends ConventionalCommits {
   }
 }
 
-export default new SemanticReleaseWorkflow(
-  { nextDevelopment: true },
-  { analyzer: new ProjectAnalyzer(), selector: new SemanticVersionSelector("0.1.0") },
-);
+export default new SemanticReleaseWorkflow({
+  nextDevelopment: true,
+  analyzer: new ProjectAnalyzer(),
+  selector: new SemanticVersionSelector("0.1.0"),
+});
 ```
 
 Rules match optional `type`, `scope`, and `subject` string patterns and `breaking`/`revert` booleans. Patterns support only `*` and `?`, with other characters treated literally. All selectors in a rule must match. Matching rules replace default classification for that commit; the highest matching release wins, with `false` contributing no release. Defaults apply when no rule matches. Rules cannot restore changes removed by revert cancellation.
@@ -66,7 +67,7 @@ Rules match optional `type`, `scope`, and `subject` string patterns and `breakin
 
 Implement these interfaces directly in TypeScript or supply structurally compatible JavaScript classes; inheritance is optional. History returns `SemanticHistoryData` with an optional baseline and readonly `SemanticCommit` records. The analyzer selects a `ReleaseType` or `null`; the selector receives `SemanticSelection`; the notes generator receives commits. `SemanticRelease(services).analyze(head, explicitVersion?)` exposes analysis without running the release workflow and returns an immutable `SemanticDecision`, including non-releasable decisions.
 
-`SemanticReleaseWorkflow(config, services, provider?)` also accepts the existing release-service interfaces. The default history is scoped to each invocation's command, environment, directory, and remote; an injected history owns its own scoping. A custom `Changelog` must return the captured generated notes, or preparation fails before validation/commit. The ordinary `VersionPolicy` still selects the planned next version, but cannot change the captured release version.
+`SemanticReleaseWorkflow(options)` accepts release and semantic service instances directly alongside runtime settings. The default history is scoped to each invocation's command, environment, directory, and remote; an injected history owns its own scoping. A custom `Changelog` must return the captured generated notes, or preparation fails before validation/commit. The ordinary `VersionPolicy` still selects the planned next version, but cannot change the captured release version.
 
 For custom step composition, order `AnalyzeSemanticRelease` before `InitializeSemanticRelease`, then `PrepareRelease`, `ValidateSemanticDecision`, and the ordinary validation/commit/build/checkpoint steps. `AnalyzedReleaseOptions` carries the decision into initialization; the public declarations reject initialization without that record. Custom steps and services own any guarantees they bypass.
 

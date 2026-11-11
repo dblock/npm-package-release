@@ -23,7 +23,7 @@ Execution snapshots do not contain environment variables, credentials, provider 
 
 The default selects `GitHubExecutionProvider` only when the scoped environment has `GITHUB_ACTIONS=true`; otherwise it selects `LocalExecutionProvider`. Detection uses the supplied `env`, not unconditionally the parent process. Both providers copy their input environment without mutating it.
 
-An explicit provider takes precedence. Pass it as `new ReleaseWorkflow(config, services, provider)`, `Workflow.start(observer, provider)`, or a per-run `provider` option. Per-run selection overrides the configured provider. Standalone `verify({ provider })` uses that provider for summaries too.
+An explicit provider takes precedence. Pass it as `new ReleaseWorkflow({ provider })`, `Workflow.start(observer, provider)`, or a per-run `provider` option. Per-run selection overrides the configured provider. Standalone `verify({ provider })` uses that provider for summaries too.
 
 `ExecutionProvider` defines `name`, optional `defaultBranch`/`timezone`, `context(attributes)`, `validateReleaseBranch(branch)`, and `summary(message)`. Classes may implement the interface directly or extend `LocalExecutionProvider`. The local implementation supplies neutral snapshots and no summary side effects. GitHub adds metadata, manual-dispatch/ref validation, and scoped job-summary writing. It may also receive already observed step snapshots as its second constructor argument; those preserve outcome/conclusion separately.
 
@@ -49,7 +49,6 @@ class ReleaseNotifications {
 }
 
 export default new ReleaseWorkflow({
-  changelog: { format: "intridea" },
   observer: new ReleaseNotifications(),
 });
 ```

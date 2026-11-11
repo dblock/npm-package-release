@@ -10,7 +10,7 @@ import { currentExecutionProvider } from "./execution.js";
 import { readCheckpoint, writeCheckpoint } from "./checkpoint.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
 import {
-  DirectoryReleaseStore, GitHubReleaseHost, HookValidator, MarkdownChangelog, NumericPatchVersions,
+  DirectoryReleaseStore, GitHubReleaseHost, HookValidator, KeepAChangelog, NumericPatchVersions,
   RegistryVisibility, snapshot, verificationOptions,
 } from "./services.js";
 import type {
@@ -110,74 +110,76 @@ function isReleaseContext(value: unknown): value is ReleaseContext<string> {
 }
 
 function validateConfig(config: ReleaseConfig): void {
-  if (!config || !Object.hasOwn(config, "changelog")) throw new Error("Configure an explicit changelog format, or changelog: null.");
-  if (config.changelog !== null && !["intridea", "keep-a-changelog"].includes(config.changelog.format)) {
-    throw new Error("Unknown changelog format.");
+  if (!config || typeof config !== "object") throw new Error("Expected a release configuration object.");
+  for (const option of ["github", "verification", "validate", "validateArtifact"]) {
+    if (Object.hasOwn(config, option)) throw new Error(`Unsupported release option: ${option}; configure a service instance instead.`);
   }
-  for (const hook of ["prepare", "validate", "validateArtifact", "next"] as const) {
+  if (config.changelog !== undefined && config.changelog !== null &&
+    (typeof config.changelog.release !== "function" || typeof config.changelog.next !== "function")) {
+    throw new Error("Changelog must implement release and next; use a changelog class, not a format object.");
+  }
+  for (const hook of ["prepare", "next"] as const) {
     if (config[hook] !== undefined && typeof config[hook] !== "function") throw new Error(`${hook} must be a function.`);
   }
 }
 
-function releaseHost(config: ReleaseConfig, run: Command, manifest: PackageManifest, overrides: Partial<ReleaseServices>) {
-  const repository = config.repository || manifest.repository?.url?.replace(/^git\+/u, "").match(
+function releaseHost(config: ReleaseConfig, run: Command, manifest: PackageManifest) {
+  const repository = manifest.repository?.url?.replace(/^git\+/u, "").match(
     /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/u,
   )?.[1];
-  return overrides.host !== undefined ? overrides.host :
-    config.github === false ? null : new GitHubReleaseHost(run, repository || "");
+  return config.host !== undefined ? config.host : new GitHubReleaseHost(run, repository || "");
 }
 
-function releaseServices(config: ReleaseConfig, cwd: string, overrides: Partial<ReleaseServices>,
+function releaseServices(config: ReleaseConfig,
   core: Pick<ReleaseServices, "repository" | "project" | "publisher" | "versions" | "store" | "host">): ReleaseServices {
   return Object.freeze({
     ...core,
-    validator: overrides.validator || new HookValidator(config),
-    changelog: overrides.changelog !== undefined ? overrides.changelog :
-      config.changelog ? new MarkdownChangelog(resolve(cwd, config.changelog.path || "CHANGELOG.md"), config.changelog) : null,
-    verifier: overrides.verifier || new RegistryVisibility(core.publisher),
+    validator: config.validator || new HookValidator(),
+    changelog: config.changelog === undefined ? new KeepAChangelog() : config.changelog,
+    verifier: config.verifier || new RegistryVisibility(core.publisher),
   });
 }
 
 export class InitializeRelease implements Step<ReleaseOptions, InitializedRelease> {
   readonly id = "initialize";
-  constructor(readonly config: ReleaseConfig, readonly services: Partial<ReleaseServices> = {}) {}
+  constructor(readonly config: ReleaseConfig = {}) {}
 
   async run(options: ReleaseOptions, execution?: ExecutionContext, injectedProvider?: ExecutionProvider): Promise<InitializedRelease> {
     const config = this.config;
     validateConfig(config);
     const { cwd = process.cwd(), run = command, log = console.log } = options;
     const env = Object.freeze({ ...(options.env || process.env) });
-    const provider = options.provider || injectedProvider || currentExecutionProvider(env);
+    const provider = options.provider || injectedProvider || config.provider || currentExecutionProvider(env);
     const timezone = config.timezone || provider.timezone || "UTC";
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
     }).formatToParts(new Date());
     const date = ["year", "month", "day"].map((type) => parts.find((part) => part.type === type)!.value).join("-");
-    const verification = verificationOptions(config.verification);
+    const verification = verificationOptions(config.verifier?.options);
     const execute = scopedCommand(cwd, run, timezone, "release", env);
     if (await realpath(cwd) !== await realpath((await execute("git", ["rev-parse", "--show-toplevel"])).trim())) {
       throw new Error("Run releases from the repository root.");
     }
-    const repository = this.services.repository || new Git(execute, { branch: config.branch || provider.defaultBranch, remote: config.remote });
+    const repository = config.repository || new Git(execute, { branch: config.branch || provider.defaultBranch, remote: config.remote });
     await repository.initialize();
     provider.validateReleaseBranch(repository.branch);
     const npm = new NpmPackage(cwd, execute);
-    const project = this.services.project || npm;
-    const publisher = this.services.publisher || npm;
+    const project = config.project || npm;
+    const publisher = config.publisher || npm;
     const manifest = await project.read();
-    const versions = this.services.versions || new NumericPatchVersions();
+    const versions = config.versions || new NumericPatchVersions();
     const { version, nextVersion } = versions.select(manifest.version, options.version);
-    const host = releaseHost(config, execute, manifest, this.services);
+    const host = releaseHost(config, execute, manifest);
     await repository.missingTag(version);
     await publisher.available(manifest.name, version);
-    const store = this.services.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, options.artifacts));
+    const store = config.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, options.artifacts));
     const state = snapshot({
       name: manifest.name, version, previousVersion: manifest.version, nextVersion,
       date, timezone, branch: repository.branch, remote: repository.remote, initialCommit: repository.initialCommit,
       verificationOptions: verification, phase: "started",
     });
     await store.initialize(state);
-    const services = releaseServices(config, cwd, this.services, {
+    const services = releaseServices(config, {
       repository, project, publisher, versions, store, host,
     });
     const runtime = new ReleaseRuntime(config, cwd, run, log, env, services, state, provider);
@@ -193,7 +195,7 @@ export class PrepareRelease implements Step<InitializedRelease, PreparedRelease>
     let notes = "";
     const preparedTree = await repository.stage(async () => {
       await project.setVersion(state.version);
-      notes = await changelog?.release(input.release) || "";
+      notes = await changelog?.release({ ...input.release, cwd: runtime.cwd }) || "";
       await runtime.config.prepare?.(runtime.hook("prepare", execution?.withRelease(input.release.withNotes(notes))));
       if ((await project.read()).version !== state.version) throw new Error("Preparation changed the selected version.");
       await project.lockfile(await project.read());
@@ -263,19 +265,19 @@ export class CheckpointRelease implements Step<BuiltRelease, BuiltRelease> {
 
 export class RestoreRelease implements Step<ReleaseOptions, BuiltRelease> {
   readonly id = "restore";
-  constructor(readonly config: ReleaseConfig, readonly overrides: Partial<ReleaseServices> = {},
+  constructor(readonly config: ReleaseConfig = {},
     readonly semantic?: { readonly nextDevelopment: boolean }) {}
 
   async run(options: ReleaseOptions, execution?: ExecutionContext, injectedProvider?: ExecutionProvider): Promise<BuiltRelease> {
     const { cwd = process.cwd(), run = command, log = console.log } = options;
     const env = Object.freeze({ ...(options.env || process.env) });
-    const provider = options.provider || injectedProvider || currentExecutionProvider(env);
+    const provider = options.provider || injectedProvider || this.config.provider || currentExecutionProvider(env);
     validateConfig(this.config);
     const execute = scopedCommand(cwd, run, this.config.timezone || provider.timezone || "UTC", "restore", env);
     if (await realpath(cwd) !== await realpath((await execute("git", ["rev-parse", "--show-toplevel"])).trim())) {
       throw new Error("Run releases from the repository root.");
     }
-    const store = this.overrides.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, options.artifacts));
+    const store = this.config.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, options.artifacts));
     const checkpoint = await readCheckpoint(store.directory);
     if (Boolean(checkpoint.semantic) !== Boolean(this.semantic) ||
       (this.semantic && checkpoint.semantic?.nextDevelopment !== this.semantic.nextDevelopment)) {
@@ -290,10 +292,10 @@ export class RestoreRelease implements Step<ReleaseOptions, BuiltRelease> {
       throw new Error("Configuration differs from release checkpoint.");
     }
     const scoped = scopedCommand(cwd, run, checkpoint.timezone, "release", env);
-    const repository = this.overrides.repository || new Git(scoped, { branch: source.branch, remote: source.remote });
+    const repository = this.config.repository || new Git(scoped, { branch: source.branch, remote: source.remote });
     provider.validateReleaseBranch(source.branch);
     const npm = new NpmPackage(cwd, scoped);
-    const project = this.overrides.project || npm;
+    const project = this.config.project || npm;
     const state = snapshot({
       name: release.name, version: release.version, previousVersion: release.manifestVersion,
       nextVersion: release.nextVersion!, date: release.date, timezone: checkpoint.timezone,
@@ -306,11 +308,11 @@ export class RestoreRelease implements Step<ReleaseOptions, BuiltRelease> {
     if (manifest.name !== release.name || ![release.version, release.nextVersion].includes(manifest.version)) {
       throw new Error("Checkout package differs from release checkpoint.");
     }
-    const publisher = this.overrides.publisher || npm;
-    const services = releaseServices(this.config, cwd, this.overrides, {
+    const publisher = this.config.publisher || npm;
+    const services = releaseServices(this.config, {
       repository, project, publisher, store,
-      host: releaseHost(this.config, scoped, manifest, this.overrides),
-      versions: this.overrides.versions || new NumericPatchVersions(),
+      host: releaseHost(this.config, scoped, manifest),
+      versions: this.config.versions || new NumericPatchVersions(),
     });
     const runtime = new ReleaseRuntime(this.config, cwd, run, log, env, services, state, provider);
     await store.save(state);
@@ -372,7 +374,7 @@ export class PrepareNextVersion implements Step<HostedRelease | PushedRelease, N
     } else {
       const nextTree = await repository.stage(async () => {
         await project.setVersion(state.nextVersion);
-        await changelog?.next({ version: state.nextVersion, releasedVersion: state.version });
+        await changelog?.next({ version: state.nextVersion, releasedVersion: state.version, cwd: runtime.cwd });
         await runtime.config.next?.(runtime.hook("next", execution));
         if ((await project.read()).version !== state.nextVersion) throw new Error("Next hook changed the development version.");
         await project.lockfile(await project.read());

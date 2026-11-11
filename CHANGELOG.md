@@ -10,4 +10,5 @@
 - [#7](https://github.com/dblock/npm-package-release/pull/7): Add opt-in semantic releases with replaceable history, Conventional Commits analysis, version selection, generated notes, and immutable decisions without reanalysis - [@dblock](https://github.com/dblock).
 - [#8](https://github.com/dblock/npm-package-release/pull/8): Add a tested self-release configuration with installed SDK/CLI validation and a concrete, separately authorized first-publication procedure - [@dblock](https://github.com/dblock).
 - [#9](https://github.com/dblock/npm-package-release/pull/9): Share release service defaults and preparation sequences without changing workflow contracts or recovery checks - [@dblock](https://github.com/dblock).
+- [#10](https://github.com/dblock/npm-package-release/pull/10): Default to KeepAChangelog with class-based service options and workflow-instance exports, remove unreleased configuration adapters, and document minimal Trusted Publishing setup targeting 0.1.0 - [@dblock](https://github.com/dblock).
 - Your contribution here.

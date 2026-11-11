@@ -45,17 +45,17 @@ Repeated explicit completion may revalidate the existing next-development tree a
 ```js
 import { ReleaseWorkflow } from "npm-package-release";
 
-const workflow = new ReleaseWorkflow({ changelog: { format: "intridea" } });
+const workflow = new ReleaseWorkflow();
 await workflow.prepare({ artifacts: "/path/to/checkpoint" });
 // Copy the entire directory to durable storage here.
 await workflow.complete({ artifacts: "/path/to/checkpoint" });
 ```
 
-`prepare(configOrWorkflow, options)` and `complete(configOrWorkflow, options)` provide the same operations. A `ReleaseWorkflow` implements `CheckpointWorkflow<BuiltRelease, ReleaseState>` and retains `run` for the one-process API. Its preparation forwards step/failure observers but reserves whole-release `succeeded` notifications for run/completion.
+`prepare(workflow, options)` and `complete(workflow, options)` provide the same operations. A `ReleaseWorkflow` implements `CheckpointWorkflow<BuiltRelease, ReleaseState>` and retains `run` for the one-process API. Its preparation forwards step/failure observers but reserves whole-release `succeeded` notifications for run/completion.
 
-Custom staged classes implement `CheckpointWorkflow<Prepared, Output>` explicitly. Compose `CheckpointRelease` after the final artifact-policy step; compose `RestoreRelease(config, services)` before publication in the completion workflow. Both pass `BuiltRelease` through strong step contracts. `readCheckpoint(directory)` returns a frozen descriptor, not executable services. Custom repository implementations now also implement `restore` and `nextIteration`; custom providers, publishers, projects, and hosting services remain independently replaceable.
+Custom staged classes implement `CheckpointWorkflow<Prepared, Output>` explicitly. Compose `CheckpointRelease` after the final artifact-policy step; compose `RestoreRelease(options)` before publication in the completion workflow. Both pass `BuiltRelease` through strong step contracts. `readCheckpoint(directory)` returns a frozen descriptor, not executable services. Custom repository implementations also implement `restore` and `nextIteration`; custom providers, publishers, projects, and hosting services remain independently replaceable.
 
-Existing plain `Workflow` configurations still work with `npr release`. Actions now requires a configuration object, `ReleaseWorkflow`, or custom class with both prepare/complete methods; it rejects a plain run-only workflow rather than bypassing the checkpoint. See [Composable Workflows](workflows.md) for composition.
+`Workflow` instances work with `npr release`. Actions requires a `ReleaseWorkflow` or custom class with both prepare/complete methods; it rejects plain objects and run-only workflows rather than bypassing the checkpoint. See [Composable Workflows](workflows.md) for composition.
 
 ## Recovery Limits
 

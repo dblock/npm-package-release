@@ -7,7 +7,7 @@ import { Workflow } from "./workflow.js";
 import { currentExecutionProvider } from "./execution.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
 import type { Step, WorkflowObserver } from "./workflow.js";
-import type { ReleaseConfig, ReleaseOptions, ReleaseServices, ReleaseState, VerifyOptions } from "./contracts.js";
+import type { ReleaseConfig, ReleaseOptions, ReleaseState, VerifyOptions } from "./contracts.js";
 import {
   DirectoryReleaseStore, HookValidator, NumericPatchVersions, RegistryVisibility,
 } from "./services.js";
@@ -48,12 +48,12 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   readonly preparation: Workflow<ReleaseOptions, BuiltRelease>;
   readonly completion: Workflow<ReleaseOptions, ReleaseState>;
 
-  constructor(private readonly config: ReleaseConfig, services: Partial<ReleaseServices> = {}, provider?: ExecutionProvider) {
-    this.preparation = checkpointRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider)
-      .then(new InitializeRelease(config, services))
+  constructor(private readonly config: ReleaseConfig = {}) {
+    this.preparation = checkpointRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
+      .then(new InitializeRelease(config))
       .then(new PrepareRelease()));
     this.workflow = finishRelease(this.preparation);
-    this.completion = finishRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider).then(new RestoreRelease(config, services)));
+    this.completion = finishRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider).then(new RestoreRelease(config)));
   }
 
   async run(options: ReleaseOptions = {}, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<ReleaseState> {
@@ -69,29 +69,32 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   }
 }
 
-function staged(config: ReleaseConfig | CheckpointWorkflow): CheckpointWorkflow {
-  if ("complete" in config && typeof config.complete === "function" && typeof config.prepare === "function") return config;
-  if ("run" in config) throw new Error("Custom workflows must implement prepare and complete for a checkpoint handoff.");
-  return new ReleaseWorkflow(config as ReleaseConfig);
+function workflowInstance(workflow: unknown): boolean {
+  return typeof workflow === "object" && workflow !== null &&
+    Object.getPrototypeOf(workflow) !== Object.prototype && Object.getPrototypeOf(workflow) !== null;
 }
 
-export function prepare(config: ReleaseConfig, options?: ReleaseOptions): Promise<BuiltRelease>;
-export function prepare<Prepared>(workflow: CheckpointWorkflow<Prepared>, options?: ReleaseOptions): Promise<Prepared>;
-export async function prepare(config: ReleaseConfig | CheckpointWorkflow, options: ReleaseOptions = {}): Promise<unknown> {
-  return staged(config).prepare(options);
+function staged(workflow: CheckpointWorkflow): void {
+  if (!workflowInstance(workflow) || typeof workflow.prepare !== "function" || typeof workflow.complete !== "function") {
+    throw new Error("Export a workflow instance implementing prepare and complete for a checkpoint handoff.");
+  }
 }
 
-export function complete(config: ReleaseConfig, options?: ReleaseOptions): Promise<ReleaseState>;
-export function complete<Output>(workflow: CheckpointWorkflow<unknown, Output>, options?: ReleaseOptions): Promise<Output>;
-export async function complete(config: ReleaseConfig | CheckpointWorkflow, options: ReleaseOptions = {}): Promise<unknown> {
-  return staged(config).complete(options);
+export async function prepare<Prepared>(workflow: CheckpointWorkflow<Prepared>, options: ReleaseOptions = {}): Promise<Prepared> {
+  staged(workflow);
+  return workflow.prepare(options);
 }
 
-export function release(config: ReleaseConfig, options?: ReleaseOptions): Promise<ReleaseState>;
-export function release<Output>(workflow: Step<ReleaseOptions, Output>, options?: ReleaseOptions): Promise<Output>;
-export async function release(config: ReleaseConfig | Step<ReleaseOptions, unknown>, options: ReleaseOptions = {}): Promise<unknown> {
-  if (config && "run" in config && typeof config.run === "function" && "id" in config) return config.run(options);
-  return new ReleaseWorkflow(config as ReleaseConfig).run(options);
+export async function complete<Output>(workflow: CheckpointWorkflow<unknown, Output>, options: ReleaseOptions = {}): Promise<Output> {
+  staged(workflow);
+  return workflow.complete(options);
+}
+
+export async function release<Output>(workflow: Step<ReleaseOptions, Output>, options: ReleaseOptions = {}): Promise<Output> {
+  if (!workflowInstance(workflow) || !workflow.id?.trim() || typeof workflow.run !== "function") {
+    throw new Error("Export a workflow instance with an id and run method.");
+  }
+  return workflow.run(options);
 }
 
 export async function verify({

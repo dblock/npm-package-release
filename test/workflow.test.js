@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as api from "../dist/index.js";
-import { checkComposition } from "./helpers/composition.js";
+import { checkComposition, checkDefaultChangelog } from "./helpers/composition.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
 
 test("class steps compose immutable reusable pipelines and preserve typed outputs", async () => {
@@ -49,6 +49,34 @@ test("observers see step order and failures halt without hiding the original err
 
 test("custom classes replace services and add a real prepublication artifact step", async (t) => {
   await checkComposition(t, api);
+});
+
+test("the default changelog supports Keep a Changelog through checkpoint completion", async (t) => {
+  await checkDefaultChangelog(t, api);
+});
+
+test("release entry points reject plain configuration and method-bag exports", async () => {
+  for (const value of [
+    {}, null, { changelog: { format: "intridea" } },
+    { id: "plain-object", async run() { assert.fail("Must not execute"); },
+      async prepare() { assert.fail("Must not prepare"); }, async complete() { assert.fail("Must not complete"); } },
+  ]) {
+    await assert.rejects(api.release(value), /workflow instance/u);
+    await assert.rejects(api.prepare(value), /workflow instance/u);
+    await assert.rejects(api.complete(value), /workflow instance/u);
+  }
+});
+
+test("removed service selectors fail before commands or preparation", async () => {
+  for (const config of [
+    { changelog: { format: "intridea" } }, { github: false },
+    { verification: { attempts: 1 } }, { validate: async () => {} }, { validateArtifact: async () => {} },
+  ]) {
+    await assert.rejects(new api.ReleaseWorkflow(config).prepare({
+      run: async () => { assert.fail("Invalid configuration must not execute commands"); },
+    }), /Unsupported release option|Changelog must implement/u);
+  }
+  assert.throws(() => new api.RegistryVisibility({}, { attempts: 0 }), /bounded/u);
 });
 
 test("a composed workflow can omit hosting and next-development without republishing", async (t) => {

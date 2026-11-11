@@ -2,49 +2,93 @@
 
 [![Test](https://github.com/dblock/npm-package-release/actions/workflows/test.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/test.yml) [![Lint](https://github.com/dblock/npm-package-release/actions/workflows/lint.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/lint.yml) [![Package](https://github.com/dblock/npm-package-release/actions/workflows/package.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/package.yml) [![Coverage Status](https://coveralls.io/repos/github/dblock/npm-package-release/badge.svg?branch=master)](https://coveralls.io/github/dblock/npm-package-release?branch=master)
 
-Composable, strongly typed release workflows for npm, with a JavaScript API, CLI, and GitHub Actions interfaces, ported from [ruby-gem-release](https://github.com/dblock/ruby-gem-release).
+**Release your npm package from GitHub Actions without maintaining custom release scripts or storing an npm publish token.**
 
-Use the default workflow to validate and publish one archive, create its GitHub Release, and prepare the next development iteration, or compose your own workflow from class-based steps and replaceable service interfaces. This package has not had its first npm publication yet.
+One dispatch updates the changelog, tests and publishes the package, creates its GitHub Release, and prepares the next development iteration. Inspired by [ruby-gem-release](https://github.com/dblock/ruby-gem-release), with class-based, strongly typed workflow composition.
 
 ## Installation
 
-Requires Node.js 22.14+, 24, or 26 and newer supported releases. Until publication, use the [local setup instructions](CONTRIBUTING.md#setup-and-validation).
+Requires Node.js 22.14+ and npm 11.5.1+; the release workflow defaults to Node.js 26/npm 12.
+
+```sh
+npm install --save-dev --save-exact npm-package-release@0.1.0
+```
+
+The CLI is `npr`, but do not install the unrelated npm package `npr`.
 
 ## Usage
 
-The CLI is named `npr`; the npm package remains `npm-package-release`. From this checkout:
+### 1. Configure Your Package
 
-```sh
-npm run build
-node bin/npr.js --help
-```
-
-```text
-Usage: npr [--help | --version]
-
-       npr release [--config npr.config.js] [--version X.Y.Z] [--artifacts PATH]
-       npr verify [--artifacts PATH]
-```
-
-For consumers, configure the [release workflow](docs/usage.md#github-actions) and manually dispatch it after authorized Trusted Publishing setup. See [Detailed Usage](docs/usage.md) for CLI/API commands and recovery. Do not use bare `npx npr` to install this tool: that npm package belongs to an unrelated project.
-
-## Configuration
-
-Export a workflow from `npr.config.js`:
+Create `npr.config.js`:
 
 ```js
-import { ReleaseWorkflow } from "npm-package-release";
+import { KeepAChangelog, ReleaseWorkflow } from "npm-package-release";
 
 export default new ReleaseWorkflow({
-  changelog: { format: "intridea" },
+  changelog: new KeepAChangelog(),
 });
 ```
 
-The default validation runs `npm test` and `npm run lint` before publication and for the next development iteration. [Composable Workflows](docs/workflows.md) explains custom classes and service injection; [Execution Providers and Contexts](docs/execution.md) covers platform metadata and notifications; [Detailed Usage](docs/usage.md#configuration) documents compatible configuration objects, hooks, and defaults.
+Use a numeric package version, a GitHub `repository` URL, and a `CHANGELOG.md` with `## [Unreleased]` and real notes. `KeepAChangelog` is also the default when omitted. Default validation runs `npm test` and `npm run lint`. For CommonJS projects, use `npr.config.mjs` and set the workflow's `config` input accordingly.
 
-For opt-in Conventional Commits version selection and generated notes, export `new SemanticReleaseWorkflow()` instead. See [Semantic Releases](docs/semantic.md) for first-release, breaking-change, and next-development policies.
+### 2. Add the Release Workflow
 
-This repository's own [release configuration](https://github.com/dblock/npm-package-release/blob/master/npr.config.js) validates its installed archive API and CLI. [RELEASING.md](RELEASING.md) separates the first manual publication from later authorized automation.
+Add `.github/workflows/release.yml` using the [caller example](examples/release.yml):
+
+```yaml
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional numeric release version.
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    uses: dblock/npm-package-release/.github/workflows/release.yml@v0.1.0
+    with:
+      version: ${{ inputs.version }}
+```
+
+Merge the caller and locked development dependency into your default branch. Upgrade the package and pinned workflow together.
+
+### 3. Enable Trusted Publishing
+
+In **your GitHub repository → Settings → Environments**, create `release`, restrict it to your default branch, and optionally require maintainer approval. Branch rules must allow release commits/tags to be pushed; see [setup and branch permissions](docs/usage.md#new-project-setup).
+
+**New npm package:** First [publish a tested archive manually](docs/usage.md#first-publication). Then open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
+
+| Field | Value |
+| --- | --- |
+| Organization or user | Your GitHub owner. |
+| Repository | Your package's repository, not this tool's repository. |
+| Workflow filename | `release.yml`, the caller filename only. |
+| Environment name | `release`. |
+| Allowed actions | Enable direct `npm publish`, not stage-only. |
+
+No npm publish token or `NODE_AUTH_TOKEN` is needed. A new publisher must successfully publish within [two days](https://docs.npmjs.com/trusted-publishers/) or expire; configure it when you are ready to release.
+
+### 4. Make a Release
+
+Review your changes, run tests, and dispatch from your default branch:
+
+```sh
+gh workflow run release.yml
+```
+
+This publishes the checked-in version and prepares the next patch version. After a manual first publication, select a new unpublished version; pass `-f version=0.1.1` to override the checked-in version. Verify the run summary, registry version/checksums, and GitHub Release. Inspect [recovery artifacts](docs/checkpoints.md) before retrying a failed run.
+
+## Configuration
+
+See [Detailed Usage](docs/usage.md) for CLI/API commands, hooks, and defaults; [Composable Workflows](docs/workflows.md) for custom classes and services; and [Semantic Releases](docs/semantic.md) for opt-in Conventional Commits versioning and generated notes.
 
 ## Contributing
 

@@ -20,8 +20,8 @@ export async function checkSemanticRelease(t, api) {
   const source = await fixture.commit();
   const originalChangelog = await readFile(join(fixture.cwd, "CHANGELOG.md"), "utf8");
   const config = {
-    verification: fixture.config.verification, prepare: fixture.config.prepare,
-    next: fixture.config.next, validateArtifact: fixture.config.validateArtifact,
+    verifier: fixture.config.verifier, prepare: fixture.config.prepare,
+    next: fixture.config.next, validator: fixture.config.validator,
   };
   const workflow = new api.SemanticReleaseWorkflow(config);
   const built = await api.prepare(workflow, fixture);
@@ -51,9 +51,9 @@ export async function checkSemanticRelease(t, api) {
     assert.equal(fixture.published.length, 0);
   }
   await writeFile(checkpointPath, originalCheckpoint);
-  await assert.rejects(api.complete(fixture.config, fixture), /workflow policy differs/u);
+  await assert.rejects(api.complete(new api.ReleaseWorkflow(fixture.config), fixture), /workflow policy differs/u);
   await assert.rejects(new api.SemanticReleaseWorkflow({ ...config, nextDevelopment: true }).complete(fixture), /workflow policy differs/u);
-  const completion = new api.SemanticReleaseWorkflow(config, {
+  const completion = new api.SemanticReleaseWorkflow({ ...config,
     analyzer: { analyze() { assert.fail("Completion must not reanalyze history"); } },
   });
   const result = await api.complete(completion, fixture);
