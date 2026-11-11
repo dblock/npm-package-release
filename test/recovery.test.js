@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import process from "node:process";
 import test from "node:test";
 import * as api from "../dist/index.js";
 import { command } from "../dist/command.js";
@@ -140,7 +142,8 @@ test("hosted releases reconcile missing assets, reject conflicts, and resolve am
   const fixture = await releaseFixture(t);
   const archive = join(fixture.directory, "example.tgz");
   const notes = join(fixture.directory, "notes.md");
-  await writeFile(archive, "Exact archive bytes");
+  const bytes = Buffer.from([0, 255, 128, 13, 10, 192, 254, 42]);
+  await writeFile(archive, bytes);
   await writeFile(notes, "Release notes\n");
   const asset = {
     name: basename(archive), digest: "sha256:" + createHash("sha256").update(await readFile(archive)).digest("hex"),
@@ -152,7 +155,22 @@ test("hosted releases reconcile missing assets, reject conflicts, and resolve am
   let accept = true;
   let failMutation = false;
   let mutations = 0;
-  const host = new api.GitHubReleaseHost(async (program, args) => {
+  let downloads = 0;
+  let output;
+  let downloaded = bytes;
+  let downloadError;
+  const host = new api.GitHubReleaseHost(async (program, args, options) => {
+    if (args[0] === "api" && args[1] === "repos/owner/repo/releases/assets/42") {
+      assert.equal(program, "gh");
+      assert.deepEqual(args.slice(2), ["--header", "Accept: application/octet-stream"]);
+      output = options.output;
+      downloads++;
+      if (downloadError) {
+        await writeFile(output, "Partial download");
+        throw downloadError;
+      }
+      return command(process.execPath, ["-e", `process.stdout.write(Buffer.from(${JSON.stringify([...downloaded])}))`], options);
+    }
     if (args[0] === "api") {
       if (error) throw error;
       if (response !== undefined) return response;
@@ -172,6 +190,32 @@ test("hosted releases reconcile missing assets, reject conflicts, and resolve am
   await host.create(identity, { archive, notes });
   await host.create(identity, { archive, notes });
   assert.equal(mutations, 1);
+  assert.equal(downloads, 0);
+  for (const digest of [undefined, null, "", "sha256:invalid", 42]) {
+    metadata.assets = [{ name: asset.name, id: 42, digest, browser_download_url: "https://untrusted.invalid/asset" }];
+    await host.create(identity, { archive, notes });
+    await assert.rejects(readFile(output), { code: "ENOENT" });
+  }
+  assert.equal(downloads, 5);
+  metadata.assets = [{ ...asset, id: 42, digest: "sha256:" + "0".repeat(64) }];
+  await assert.rejects(host.create(identity, { archive, notes }), /checksum differs/u);
+  assert.equal(downloads, 5);
+  for (const id of [undefined, 0, -1, 1.5, "42", Number.MAX_SAFE_INTEGER + 1]) {
+    metadata.assets = [{ name: asset.name, id }];
+    await assert.rejects(host.create(identity, { archive, notes }), /positive download ID/u);
+  }
+  metadata.assets = [{ name: asset.name, id: 42 }, { name: asset.name, id: 42 }];
+  await assert.rejects(host.create(identity, { archive, notes }), /checksum differs/u);
+  assert.equal(downloads, 5);
+  metadata.assets = [{ name: asset.name, id: 42 }];
+  downloaded = Buffer.from("Different bytes");
+  await assert.rejects(host.create(identity, { archive, notes }), /checksum differs/u);
+  await assert.rejects(readFile(output), { code: "ENOENT" });
+  downloadError = new Error("Asset download failed");
+  await assert.rejects(host.create(identity, { archive, notes }), (error) => error === downloadError);
+  await assert.rejects(readFile(output), { code: "ENOENT" });
+  assert.equal(mutations, 1);
+  metadata.assets = [asset];
   metadata.body = "Changed by another actor";
   await assert.rejects(host.create(identity, { archive, notes }), /metadata differs/u);
   metadata = { ...expected, assets: [{ name: asset.name }] };

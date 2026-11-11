@@ -87,11 +87,11 @@ if (args[0] === "view") {
     await writeFile(join(bin, "gh"), `#!/usr/bin/env node
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { basename } from "node:path";
-import { createHash } from "node:crypto";
 const args = process.argv.slice(2);
 const hosted = ${JSON.stringify(hosted)};
 if (args[0] === "api") {
-  if (existsSync(hosted)) process.stdout.write("HTTP/2.0 200 OK\\n\\n" + readFileSync(hosted, "utf8"));
+  if (args[1] === "repos/npr-test/example/releases/assets/42") process.stdout.write(readFileSync(hosted + ".tgz"));
+  else if (existsSync(hosted)) process.stdout.write("HTTP/2.0 200 OK\\n\\n" + readFileSync(hosted, "utf8"));
   else { process.stdout.write("HTTP/2.0 404 Not Found\\n\\n{}"); process.exitCode = 1; }
 } else if (args[0] === "release" && args[1] === "create") {
   if (existsSync(hosted)) throw new Error("Duplicate hosted release");
@@ -99,8 +99,9 @@ if (args[0] === "api") {
     tag_name: args[2], name: args[args.indexOf("--title") + 1],
     body: readFileSync(args[args.indexOf("--notes-file") + 1], "utf8"),
     draft: false, prerelease: false,
-    assets: [{ name: basename(args[3]), digest: "sha256:" + createHash("sha256").update(readFileSync(args[3])).digest("hex") }],
+    assets: [{ name: basename(args[3]), id: 42 }],
   }));
+  writeFileSync(hosted + ".tgz", readFileSync(args[3]));
 } else throw new Error("Unexpected hosted operation");
 `, { mode: 0o755 });
     const artifacts = join(fixture.directory, "npr-release");
