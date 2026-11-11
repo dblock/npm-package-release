@@ -20,7 +20,7 @@ Do not invoke `release` or `prepare` as a read-only preview: they edit files and
 
 The first release is complete: [`0.1.0` on npm](https://www.npmjs.com/package/npm-package-release/v/0.1.0) was manually approved on November 11, 2026, and `latest` points to it. The [`v0.1.0` tag/GitHub Release](https://github.com/dblock/npm-package-release/releases/tag/v0.1.0) identifies the archive's actual source commit, `86e51cb4a5f1177caa0e9630a335cbe52b5add9f`. Downloaded registry and GitHub Release archives are byte-identical to the validated archive; both checksums below match. No stage remains, and no rejection or placeholder deletion was needed.
 
-The steps below document that completed one-time process; do not repeat staging or approval of `0.1.0`. Its bundled undated changelog and earlier bootstrap documentation were explicitly accepted unchanged. The repository now prepares `0.1.1`; [Trusted Publishing setup](#trusted-publishing-setup) is still required before an automated release.
+The steps below document that completed one-time process; do not repeat staging or approval of `0.1.0`. Its bundled undated changelog and earlier bootstrap documentation were explicitly accepted unchanged. The repository now prepares `0.1.1`; [Trusted Publishing setup](#trusted-publishing-setup) is configured, but release dispatch still requires separate approval.
 
 The built-in publisher runs direct `npm publish`; it does not stage, approve, or reject packages. A pending stage blocks direct publication of the same version. Do not dispatch Actions for `0.1.0` while its stage exists or after it is published. Do not reject any candidate before the real `0.1.0` publication is verified. Reviewing this path does not authorize publication.
 
@@ -119,20 +119,31 @@ After registry confirmation, use a follow-up PR for the next development version
 
 ## Trusted Publishing Setup
 
-The [self-release caller](https://github.com/dblock/npm-package-release/blob/master/.github/workflows/self-release.yml) publishes subsequent releases after the verified manual first publication. Before dispatching, select a new unpublished version with no conflicting pending stage and explicitly authorize the publisher/environment/protection setup below. Do not dispatch `0.1.0` after manually approving it. No enablement variable is required.
+Setup for the [self-release caller](https://github.com/dblock/npm-package-release/blob/master/.github/workflows/self-release.yml) was explicitly authorized on November 11, 2026, for the unpublished `0.1.1`. The GitHub environment and effective default-branch rules were read back through the API. The maintainer saved the npm publisher through the website and checked all five fields below; this shell's CLI read-back remains gated by browser 2FA.
 
-With setup approval, configure and read back the npm publisher:
+| Setting | Configured Value |
+| --- | --- |
+| npm package | `npm-package-release` |
+| GitHub owner/repository | `dblock/npm-package-release` |
+| Calling workflow filename | `self-release.yml` |
+| Environment | `release` |
+| Direct `npm publish` | Enabled |
+| Deployment branch policy | Only branch `master`, no tag policies |
+| Default-branch ruleset | `Protect Default Branch` (`26827237`), active force-push/deletion protections, no bypass actors, no PR requirement |
+
+No npm publishing secrets are stored in the repository. Both caller and reusable workflow grant `contents: write` and `id-token: write`; the reusable workflow uses a GitHub-hosted runner with Node.js 26/npm 12. Repository-default workflow permissions remain read-only; the release workflows request their own write permissions.
+
+To inspect npm settings from a terminal with npm 11.15+ (use Node.js 26/npm 12), complete any browser 2FA prompt yourself:
 
 ```sh
-npm trust github npm-package-release --file self-release.yml --repo dblock/npm-package-release --env release --allow-publish --registry=https://registry.npmjs.org
 npm trust list npm-package-release --json --registry=https://registry.npmjs.org
 ```
 
-Configure a `release` environment restricted to the default branch and the npm GitHub Actions trusted publisher for owner `dblock`, repository `npm-package-release`, calling workflow filename `self-release.yml`, environment `release`, and direct `npm publish` permission. Both caller and reusable workflow grant `contents: write` and `id-token: write`; the reusable workflow uses a GitHub-hosted runner. npm checks the caller filename, not the called `release.yml`. Newly configured publishers must complete a successful publication within two days under the [current npm policy](https://docs.npmjs.com/trusted-publishers/); configuration alone does not prove OIDC works.
+If `trust` is unknown, the terminal is using an older npm; use the package's npm website settings or activate the development tooling above. Do not install npm into this package's dependencies to obtain the CLI. npm checks the caller filename `self-release.yml`, not the called `release.yml`.
 
-Use compatible current stable Node.js/npm tooling; npm 12 has a higher runtime floor than consumers. npm validates the calling workflow filename for reusable workflows, and both callers and called workflows need OIDC permission. Do not use `NODE_AUTH_TOKEN` or stored long-lived npm tokens. Trusted Publishing automatically supplies provenance for public packages from public GitHub repositories.
+The new publisher must complete its first successful publication within two days under the [current npm policy](https://docs.npmjs.com/trusted-publishers/), or it expires and must be recreated with setup authorization. Saved settings do not prove OIDC works; the first successful Actions publication validates the relationship. Trusted Publishing automatically supplies provenance for public packages from public GitHub repositories. Do not use `NODE_AUTH_TOKEN` or stored long-lived npm tokens.
 
-Before dispatching, explicitly authorize and remove PR requirements that block the workflow's release and next-development commits, retaining active force-push/deletion protections with no bypass actors. Inspect effective repository and inherited protections, not just one ruleset. This permits fast-forward direct pushes by all writers, not only the workflow; ordinary development still requires PRs. No publisher, environment, or protection change has been performed by implementing this workflow.
+The blocking PR requirement was removed from the default-branch ruleset with setup authorization so release and next-development commits can be pushed. Force-push/deletion protections remain active with no bypass actors. This permits fast-forward direct pushes by all writers, not only the workflow; ordinary development still requires PRs. Setup does not authorize dispatch, publication, or tags. Merge the reviewed setup documentation and separately authorize the release before dispatching `0.1.1`; never dispatch the already published `0.1.0`.
 
 ## Automated Self-release
 
