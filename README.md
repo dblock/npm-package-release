@@ -44,6 +44,8 @@ The default validation runs `npm test` and `npm run lint` before publication and
 
 For opt-in Conventional Commits version selection and generated notes, export `new SemanticReleaseWorkflow()` instead. See [Semantic Releases](docs/semantic.md) for first-release, breaking-change, and next-development policies.
 
+This repository's own [release configuration](https://github.com/dblock/npm-package-release/blob/master/npr.config.js) validates its installed archive API and CLI. [RELEASING.md](RELEASING.md) separates the first manual publication from later authorized automation.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Checkpoints and Reconciliation](docs/checkpoints.md), and [Semantic Releases](docs/semantic.md).

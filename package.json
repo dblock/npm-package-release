@@ -32,7 +32,7 @@
     "prepack": "npm run build",
     "pretest": "npm run build",
     "test": "node --test test/*.test.js",
-    "test:coverage": "c8 --all --include=\"dist/**/*.js\" --include=\"bin/**/*.js\" --include=\"scripts/**/*.js\" --exclude=\"dist/contracts.js\" --reporter=text --reporter=lcov npm test",
+    "test:coverage": "c8 --all --include=\"dist/**/*.js\" --include=\"bin/**/*.js\" --include=\"scripts/**/*.js\" --include=\"npr.config.js\" --exclude=\"dist/contracts.js\" --reporter=text --reporter=lcov npm test",
     "lint": "tsc --noEmit && tsc --project tsconfig.test.json && eslint . && eslint --config eslint.config-code-blocks.js \"**/*.md\" && node scripts/check-workflow-names.js",
     "pretest:package": "npm run build",
     "test:package": "node --test test/integration/*.test.js"
