@@ -17,4 +17,5 @@
 - [#14](https://github.com/dblock/npm-package-release/pull/14): Support categorized Intridea notes and opt-in Keep a Changelog contribution templates with safe prompt/category cleanup - [@dblock](https://github.com/dblock).
 - [#15](https://github.com/dblock/npm-package-release/pull/15): Add source-preserving Markdown section updates with exact-heading validation for release-managed documentation - [@dblock](https://github.com/dblock).
 - [#16](https://github.com/dblock/npm-package-release/pull/16): Add an optional consumer testing kit with disposable Git projects, local publication adapters, safe explicit fixture copying, and an executable lifecycle example - [@dblock](https://github.com/dblock).
+- [#18](https://github.com/dblock/npm-package-release/pull/18): Overload Markdown section replacement with optional literal or regular-expression substitutions while preserving surrounding content - [@dblock](https://github.com/dblock).
 - Your contribution here.

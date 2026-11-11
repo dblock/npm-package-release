@@ -47,11 +47,33 @@ export class MarkdownSection {
     return this;
   }
 
-  async replace(body: string, { cwd }: { readonly cwd?: string } = {}): Promise<void> {
-    if (typeof body !== "string") throw new Error("Markdown section body must be a string.");
-    newline(body);
-    const { path, source, current, separator } = await this.read(cwd);
-    const text = body.replace(/\r?\n/gu, separator).replace(/^(?:\r?\n)+/u, "").replace(/(?:\r?\n)+$/u, "");
+  async replace(body: string, options?: { readonly cwd?: string }): Promise<void>;
+  async replace(search: string | RegExp, replacement: string, options?: { readonly cwd?: string }): Promise<void>;
+  async replace(
+    bodyOrSearch: string | RegExp,
+    replacementOrOptions: string | { readonly cwd?: string } = {},
+    options: { readonly cwd?: string } = {},
+  ): Promise<void> {
+    if (typeof replacementOrOptions === "string") {
+      if (typeof bodyOrSearch !== "string" && !(bodyOrSearch instanceof RegExp)) {
+        throw new Error("Markdown section search must be a string or regular expression.");
+      }
+      newline(replacementOrOptions);
+      const { path, source, current, separator } = await this.read(options.cwd);
+      const body = source.slice(current.body, current.end);
+      const text = body.replace(bodyOrSearch, replacementOrOptions.replace(/\r?\n/gu, separator));
+      newline(text);
+      const updated = source.slice(0, current.body) + text.replace(/\r?\n/gu, separator) + source.slice(current.end);
+      if (updated !== source) await writeFile(path, updated);
+      return;
+    }
+    if (!replacementOrOptions || typeof replacementOrOptions !== "object") {
+      throw new Error("Markdown replacement must be a string or options object.");
+    }
+    if (typeof bodyOrSearch !== "string") throw new Error("Markdown section body must be a string.");
+    newline(bodyOrSearch);
+    const { path, source, current, separator } = await this.read(replacementOrOptions.cwd);
+    const text = bodyOrSearch.replace(/\r?\n/gu, separator).replace(/^(?:\r?\n)+/u, "").replace(/(?:\r?\n)+$/u, "");
     const tail = current.end < source.length ? separator.repeat(2) : source.endsWith(separator) ? separator : "";
     const replacement = text ? separator.repeat(2) + text + tail : separator.repeat(2);
     await writeFile(path, source.slice(0, current.body) + replacement + source.slice(current.end));

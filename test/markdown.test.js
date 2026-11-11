@@ -4,10 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { MarkdownSection } from "../dist/index.js";
-import { checkMarkdownSection } from "./helpers/markdown.js";
+import { checkMarkdownSection, checkMarkdownSubstitutions } from "./helpers/markdown.js";
 
 test("Markdown sections preserve surrounding Unicode, examples and CRLF while replacing nested content", async (t) => {
   await checkMarkdownSection(t, { MarkdownSection });
+});
+
+test("Markdown replacements accept literal or regex substitutions confined to the selected body", async (t) => {
+  await checkMarkdownSubstitutions(t, { MarkdownSection });
 });
 
 test("Markdown sections preserve final-newline policy and support empty repeated replacement", async (t) => {
@@ -19,6 +23,8 @@ test("Markdown sections preserve final-newline policy and support empty repeated
     await writeFile(path, "###### Version [stable]\n\nOld." + ending);
     await section.replace("\r\nNew.\r\n");
     assert.equal(await readFile(path, "utf8"), "###### Version [stable]\n\nNew." + ending);
+    await section.replace("New.", "Updated.");
+    assert.equal(await readFile(path, "utf8"), "###### Version [stable]\n\nUpdated." + ending);
     await section.replace("");
     assert.equal(await readFile(path, "utf8"), "###### Version [stable]\n\n");
   }
@@ -33,6 +39,7 @@ test("missing, duplicate, inexact headings and invalid bodies fail before writin
     await writeFile(path, source);
     await assert.rejects(section.validate());
     await assert.rejects(section.replace("New."));
+    await assert.rejects(section.replace(/Old/u, "New"));
     assert.equal(await readFile(path, "utf8"), source);
   }
   await writeFile(path, "## Stable\n\nOld.\n");
@@ -43,4 +50,14 @@ test("missing, duplicate, inexact headings and invalid bodies fail before writin
   for (const heading of ["Stable", "# ", "####### Stable", "## Stable\nOther", null]) {
     assert.throws(() => new MarkdownSection(path, heading), /heading/u);
   }
+  for (const search of [null, 123, {}]) {
+    await assert.rejects(section.replace(search, "New."));
+  }
+  for (const replacement of [null, 123, () => "New.", "Mixed.\r\nAgain.\n", "Bare\rreturn"]) {
+    await assert.rejects(section.replace("Old.", replacement));
+  }
+  assert.equal(await readFile(path, "utf8"), "## Stable\n\nOld.\n");
+  await writeFile(path, "## Stable\r\n\r\nOld.\r\n");
+  await assert.rejects(section.replace(/\n/gu, ""));
+  assert.equal(await readFile(path, "utf8"), "## Stable\r\n\r\nOld.\r\n");
 });

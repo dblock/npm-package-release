@@ -15,7 +15,7 @@ import { checkComposition, checkDefaultChangelog } from "../helpers/composition.
 import { checkSemanticRelease } from "../helpers/semantic.js";
 import { checkSelfRelease } from "../helpers/self-release.js";
 import { checkLifecycle } from "../helpers/lifecycle.js";
-import { checkMarkdownSection } from "../helpers/markdown.js";
+import { checkMarkdownSection, checkMarkdownSubstitutions } from "../helpers/markdown.js";
 
 test("the actual tarball installs with strict engines and exposes its API and CLI", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "npm-package-release-consumer-"));
@@ -92,6 +92,7 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   await checkDefaultChangelog(t, installedApi);
   await checkLifecycle(t, installedApi);
   await checkMarkdownSection(t, installedApi);
+  await checkMarkdownSubstitutions(t, installedApi);
   await checkSemanticRelease(t, installedApi);
   await checkSelfRelease(t, join(consumer, "node_modules/npm-package-release"));
   const typed = join(consumer, "consumer.ts");
@@ -134,8 +135,14 @@ new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
 new KeepAChangelog("CHANGELOG.md", { placeholder: "* Contribute.", sections: ["Added", "Fixed"] });
 new IntrideaChangelog("CHANGELOG.md", { placeholder: "* Contribute." });
 new MarkdownSection("README.md", "## Stable").replace("New.", { cwd: "." });
+new MarkdownSection("README.md", "## Stable").replace("Old.", "New.");
+new MarkdownSection("README.md", "## Stable").replace(/version (\\S+)/gu, "release $1", { cwd: "." });
 // @ts-expect-error Markdown section bodies must be strings.
 new MarkdownSection("README.md", "## Stable").replace(123);
+// @ts-expect-error A regular expression requires replacement text.
+new MarkdownSection("README.md", "## Stable").replace(/Old/u);
+// @ts-expect-error Substitution text must be a string.
+new MarkdownSection("README.md", "## Stable").replace(/Old/u, () => "New.");
 // @ts-expect-error Template sections require an array.
 new KeepAChangelog("CHANGELOG.md", { sections: "Added" });
 class CheckBuild implements LifecycleHook<"build", "after"> {
