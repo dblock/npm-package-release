@@ -70,6 +70,8 @@ Export `new ReleaseWorkflow(options)` to use the standard sequence without listi
 
 `SemanticReleaseWorkflow` adds replaceable history, analyzer, selector, and generated-note classes ahead of preparation, while keeping the same staged contract. Its defaults do not require a manual changelog or create a next-development commit. See [Semantic Releases](semantic.md) for typed analysis steps, service interfaces, rules, and immutable decisions.
 
+Use [Lifecycle Hooks](hooks.md) to add ordered before/after behavior to either standard workflow without rebuilding its sequence. Hook classes receive typed step `input`/`output` or preparation `context`; preparation edits remain inside trusted staging boundaries. Use custom steps when changing the pipeline itself.
+
 ## Replace Services
 
 `InitializeRelease(options)` and `ReleaseWorkflow(options)` accept service instances directly in their options object. Omitted services use the defaults; no inheritance or global registration is required.

@@ -3,6 +3,7 @@ import {
   PublishArtifact, release, ReleaseWorkflow,
   LocalExecutionProvider, prepare, complete,
   SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator,
+  LifecycleHooks,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
@@ -10,6 +11,7 @@ import type {
   ExecutionContext, ExecutionProvider,
   ReleaseCheckpoint, CheckpointWorkflow,
   SemanticHistory, CommitAnalyzer, SemanticVersionPolicy, SemanticNotes, SemanticDecision,
+  LifecycleHook, LifecycleContext,
 } from "../../src/index.js";
 
 class InspectArtifact implements Step<BuiltRelease, BuiltRelease> {
@@ -66,6 +68,46 @@ new ReleaseWorkflow({ changelog: new Notes(), versions: new Versions(), provider
 new ReleaseWorkflow();
 new ReleaseWorkflow({ changelog: new KeepAChangelog("docs/CHANGES.md"), validator: new HookValidator() });
 new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
+class CheckBuiltArchive implements LifecycleHook<"build", "after"> {
+  readonly id = "check-built-archive";
+  async run(hookContext: LifecycleContext<"build", "after">): Promise<void> {
+    hookContext.output.state.artifact.integrity satisfies string;
+    hookContext.execution.release?.version satisfies string | undefined;
+    // @ts-expect-error Hook metadata is immutable.
+    hookContext.index = 2;
+    // @ts-expect-error Release artifact records are immutable.
+    hookContext.output.state.artifact.integrity = "changed";
+    // @ts-expect-error Post-step hooks expose output, not an ambiguous value.
+    String(hookContext.value);
+    // @ts-expect-error Step input belongs to before hooks.
+    String(hookContext.input);
+  }
+}
+const hooks = new LifecycleHooks().after("build", new CheckBuiltArchive());
+new ReleaseWorkflow({ hooks });
+new SemanticReleaseWorkflow({ hooks });
+// @ts-expect-error A post-build hook cannot run before the artifact exists.
+hooks.before("build", new CheckBuiltArchive());
+// @ts-expect-error Hooks retain their exact stage contracts.
+hooks.after("prepare", new CheckBuiltArchive());
+// @ts-expect-error Lifecycle stages are explicit.
+hooks.before("anything", new CheckBuiltArchive());
+// @ts-expect-error Hooks are class-based registries, not selector objects.
+new ReleaseWorkflow({ hooks: { build: async () => {} } });
+export function lifecyclePayloads(
+  beforeInitialize: LifecycleContext<"initialize", "before">,
+  preparation: LifecycleContext<"prepare" | "next", "before" | "after">,
+) {
+  beforeInitialize.input.version satisfies string | undefined;
+  preparation.context.version satisfies string;
+  preparation.context.run satisfies ReleaseOptions["run"];
+  // @ts-expect-error Before-step hooks expose input, not output.
+  String(beforeInitialize.output);
+  // @ts-expect-error Preparation hooks expose a command context, not a step input.
+  String(preparation.input);
+  // @ts-expect-error Preparation hooks expose a command context, not a step output.
+  String(preparation.output);
+}
 // @ts-expect-error Format objects are not changelog implementations.
 new ReleaseWorkflow({ changelog: { format: "intridea" } });
 // @ts-expect-error Hosting is selected with a host instance or null.

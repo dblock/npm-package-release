@@ -6,6 +6,8 @@ import { command, numericVersion } from "./command.js";
 import { Git } from "./git.js";
 import { NpmPackage } from "./package.js";
 import { Release } from "./release-description.js";
+import { lifecycleFor } from "./lifecycle.js";
+import type { LifecycleInvocation, LifecycleFailure } from "./lifecycle.js";
 import { currentExecutionProvider } from "./execution.js";
 import { readCheckpoint, writeCheckpoint } from "./checkpoint.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
@@ -39,6 +41,7 @@ export class ReleaseRuntime {
     readonly services: ReleaseServices,
     readonly identity: ReleaseState,
     readonly provider: ExecutionProvider = currentExecutionProvider(env),
+    readonly lifecycle?: LifecycleInvocation,
   ) {}
 
   description(): Release {
@@ -93,12 +96,15 @@ export class ReleaseObserver implements WorkflowObserver {
     if (isReleaseContext(input)) input.runtime.log(`[npr] step ${id}`);
   }
 
-  async failed({ id, input, error }: StepEvent & { error: unknown }): Promise<void> {
-    if (!isReleaseContext(input)) return;
-    const { runtime } = input;
+  async failed({ id, input, output, error }: LifecycleFailure): Promise<void> {
+    const context = isReleaseContext(input) ? input : output;
+    if (!isReleaseContext(context)) return;
+    const { runtime } = context;
     const state = await runtime.services.store.read();
+    const failedHook = runtime.lifecycle?.details(error);
     await runtime.services.store.save({
       ...state, error: error instanceof Error ? error.message : String(error), failedStep: id,
+      ...(failedHook ? { failedHook } : {}),
       ...(state.phase === "next" && state.verification !== "verified" ? { verification: "failed" } : {}),
     });
     runtime.log(`[npr] stopped at ${state.phase}; recovery artifacts: ${runtime.services.store.directory}`);
@@ -182,7 +188,7 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     const services = releaseServices(config, {
       repository, project, publisher, versions, store, host,
     });
-    const runtime = new ReleaseRuntime(config, cwd, run, log, env, services, state, provider);
+    const runtime = new ReleaseRuntime(config, cwd, run, log, env, services, state, provider, lifecycleFor(options));
     return Object.freeze({ kind: "initialized", runtime, state, release: runtime.description() });
   }
 }
@@ -194,9 +200,13 @@ export class PrepareRelease implements Step<InitializedRelease, PreparedRelease>
     const { project, repository, changelog } = runtime.services;
     let notes = "";
     const preparedTree = await repository.stage(async () => {
+      const before = runtime.hook("prepare", execution);
+      await runtime.lifecycle?.invoke("prepare", "before", before, before.execution);
       await project.setVersion(state.version);
       notes = await changelog?.release({ ...input.release, cwd: runtime.cwd }) || "";
       await runtime.config.prepare?.(runtime.hook("prepare", execution?.withRelease(input.release.withNotes(notes))));
+      const after = runtime.hook("prepare", execution?.withRelease(input.release.withNotes(notes)));
+      await runtime.lifecycle?.invoke("prepare", "after", after, after.execution);
       if ((await project.read()).version !== state.version) throw new Error("Preparation changed the selected version.");
       await project.lockfile(await project.read());
     });
@@ -314,7 +324,7 @@ export class RestoreRelease implements Step<ReleaseOptions, BuiltRelease> {
       host: releaseHost(this.config, scoped, manifest),
       versions: this.config.versions || new NumericPatchVersions(),
     });
-    const runtime = new ReleaseRuntime(this.config, cwd, run, log, env, services, state, provider);
+    const runtime = new ReleaseRuntime(this.config, cwd, run, log, env, services, state, provider, lifecycleFor(options));
     await store.save(state);
     return Object.freeze({ kind: "built", runtime, state, release });
   }
@@ -373,9 +383,12 @@ export class PrepareNextVersion implements Step<HostedRelease | PushedRelease, N
       nextCommit = existing.commit;
     } else {
       const nextTree = await repository.stage(async () => {
+        const context = runtime.hook("next", execution);
+        await runtime.lifecycle?.invoke("next", "before", context, context.execution);
         await project.setVersion(state.nextVersion);
         await changelog?.next({ version: state.nextVersion, releasedVersion: state.version, cwd: runtime.cwd });
         await runtime.config.next?.(runtime.hook("next", execution));
+        await runtime.lifecycle?.invoke("next", "after", context, context.execution);
         if ((await project.read()).version !== state.nextVersion) throw new Error("Next hook changed the development version.");
         await project.lockfile(await project.read());
       });

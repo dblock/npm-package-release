@@ -19,12 +19,34 @@ export async function checkSemanticRelease(t, api) {
   await fixture.git("tag", "-d", "v0.4.0");
   const source = await fixture.commit();
   const originalChangelog = await readFile(join(fixture.cwd, "CHANGELOG.md"), "utf8");
+  const hookEvents = [];
+  class SemanticHook {
+    id = "semantic-hook";
+    async run({ stage, timing, output, execution }) {
+      hookEvents.push(`${stage}:${timing}`);
+      if (stage === "analyze" && timing === "after") {
+        assert.ok(output.analysis instanceof api.SemanticDecision);
+        assert.equal(output.analysis.version, "0.5.0");
+        assert.equal(execution.release, null);
+      }
+      if (stage === "host" || stage === "next") assert.fail("Disabled stages must skip hooks");
+    }
+  }
+  let hooks = new api.LifecycleHooks();
+  for (const stage of ["analyze", "initialize", "semantic-decision", "restore", "host", "next", "success"]) {
+    hooks = hooks.before(stage, new SemanticHook()).after(stage, new SemanticHook());
+  }
   const config = {
     verifier: fixture.config.verifier, prepare: fixture.config.prepare,
     next: fixture.config.next, validator: fixture.config.validator,
+    hooks, host: null,
   };
   const workflow = new api.SemanticReleaseWorkflow(config);
   const built = await api.prepare(workflow, fixture);
+  assert.deepEqual(hookEvents, [
+    "analyze:before", "analyze:after", "initialize:before", "initialize:after",
+    "semantic-decision:before", "semantic-decision:after",
+  ]);
   assert.equal(fixture.published.length, 0);
   assert.equal(built.release.version, "0.5.0");
   assert.equal(built.release.manifestVersion, "0.1.0");
@@ -64,6 +86,8 @@ export async function checkSemanticRelease(t, api) {
   assert.equal(await readFile(join(fixture.cwd, "CHANGELOG.md"), "utf8"), originalChangelog);
   assert.equal(fixture.events.includes("next"), false);
   await completion.complete(fixture);
+  assert.equal(hookEvents.filter((event) => event === "analyze:after").length, 1);
+  assert.equal(hookEvents.filter((event) => event === "success:after").length, 2);
   assert.equal(fixture.published.length, 1);
   assert.equal(fixture.events.filter((event) => event === "npm pack").length, 1);
   await assert.rejects(workflow.prepare(fixture), /Nothing to release/u);

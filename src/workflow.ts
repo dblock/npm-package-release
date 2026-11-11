@@ -3,6 +3,7 @@ import type { ExecutionContext } from "./execution.js";
 import type { ExecutionProvider, ExecutionStep, WorkflowDescription } from "./execution.js";
 import type { Environment } from "./contracts.js";
 import { Release } from "./release-description.js";
+import type { LifecycleFailure } from "./lifecycle.js";
 
 export interface Step<Input, Output> {
   readonly id: string;
@@ -18,7 +19,7 @@ export interface StepEvent {
 export interface WorkflowObserver {
   started?(event: StepEvent): Promise<void>;
   completed?(event: StepEvent & { readonly output: unknown }): Promise<void>;
-  failed?(event: StepEvent & { readonly error: unknown }): Promise<void>;
+  failed?(event: LifecycleFailure): Promise<void>;
   succeeded?(event: { readonly output: unknown; readonly execution: ExecutionContext }): Promise<void>;
 }
 
@@ -49,7 +50,7 @@ class Invocation {
     return this.provider.context({ release: this.lastRelease, step, steps: this.history, workflow: this.workflow });
   }
 
-  async failed(event: StepEvent & { readonly error: unknown }): Promise<void> {
+  async failed(event: LifecycleFailure): Promise<void> {
     try { await this.observer.failed?.(event); } catch { /* Preserve the original workflow failure. */ }
   }
 }
@@ -94,14 +95,16 @@ export class Workflow<Input, Output = Input> implements Step<Input, Output> {
       const current = await this.execute(input, invocation);
       invocation.lastInput = current;
       const event = { id: step.id, input: current, execution: invocation.context(step.id, current) };
+      let output: unknown;
       try {
         await invocation.observer.started?.(event);
-        const output = await step.run(current, event.execution, invocation.provider);
-        const execution = invocation.context(step.id, output, "success");
-        await invocation.observer.completed?.({ ...event, output, execution });
-        return output;
+        const result = await step.run(current, event.execution, invocation.provider);
+        output = result;
+        const execution = invocation.context(step.id, result, "success");
+        await invocation.observer.completed?.({ ...event, output: result, execution });
+        return result;
       } catch (error) {
-        await invocation.failed({ ...event, error, execution: invocation.context(step.id, current, "failure") });
+        await invocation.failed({ ...event, error, output, execution: invocation.context(step.id, output ?? current, "failure") });
         throw error;
       }
     }, [...this.steps, step.id], this.observer, this.provider);

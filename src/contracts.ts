@@ -1,6 +1,7 @@
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
 import type { WorkflowObserver } from "./workflow.js";
 import type { SemanticPlan } from "./semantic.js";
+import type { LifecycleHooks, LifecycleHookFailure } from "./lifecycle.js";
 
 export type Environment = Readonly<Record<string, string | undefined>>;
 
@@ -52,6 +53,7 @@ export interface ReleaseState extends ReleaseIdentity {
   readonly verification?: Verification | "failed";
   readonly error?: string;
   readonly failedStep?: string;
+  readonly failedHook?: LifecycleHookFailure;
 }
 export interface HookContext {
   readonly execution: ExecutionContext;
@@ -69,6 +71,7 @@ export interface ArtifactContext extends HookContext {
 }
 export type ChangelogFormat = "intridea" | "keep-a-changelog";
 export interface ReleaseConfig extends Partial<ReleaseServices> {
+  readonly hooks?: LifecycleHooks;
   readonly observer?: WorkflowObserver;
   readonly provider?: ExecutionProvider;
   readonly branch?: string;
