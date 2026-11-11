@@ -1,6 +1,6 @@
 # Releasing
 
-This guide covers maintaining `npm-package-release`. To configure your own package, follow [README](README.md#usage) and [Detailed Usage](docs/usage.md#new-project-setup). Consumer examples target `0.1.0`; this documentation does not authorize staging, rejecting staged packages, publication, credentials, tags, publisher setup, or protection changes.
+This guide covers maintaining `npm-package-release`. To configure your own package, follow [README](README.md#usage) and [Detailed Usage](docs/usage.md#new-project-setup). Consumer documentation targets the verified `0.1.1`; this documentation does not authorize staging, rejecting staged packages, publication, credentials, tags, publisher setup, or protection changes.
 
 ## Version and Validation
 
@@ -18,9 +18,9 @@ Do not invoke `release` or `prepare` as a read-only preview: they edit files and
 
 ## First Release by Manual Approval
 
-The first release is complete: [`0.1.0` on npm](https://www.npmjs.com/package/npm-package-release/v/0.1.0) was manually approved on November 11, 2026, and `latest` points to it. The [`v0.1.0` tag/GitHub Release](https://github.com/dblock/npm-package-release/releases/tag/v0.1.0) identifies the archive's actual source commit, `86e51cb4a5f1177caa0e9630a335cbe52b5add9f`. Downloaded registry and GitHub Release archives are byte-identical to the validated archive; both checksums below match. No stage remains, and no rejection or placeholder deletion was needed.
+The first release is complete: [`0.1.0` on npm](https://www.npmjs.com/package/npm-package-release/v/0.1.0) was manually approved on November 11, 2026. The [`v0.1.0` tag/GitHub Release](https://github.com/dblock/npm-package-release/releases/tag/v0.1.0) identifies the archive's actual source commit, `86e51cb4a5f1177caa0e9630a335cbe52b5add9f`. Downloaded registry and GitHub Release archives are byte-identical to the validated archive; both checksums below match. No stage remained, and no rejection or placeholder deletion was needed.
 
-The steps below document that completed one-time process; do not repeat staging or approval of `0.1.0`. Its bundled undated changelog and earlier bootstrap documentation were explicitly accepted unchanged. The repository now prepares `0.1.1`; [Trusted Publishing setup](#trusted-publishing-setup) is configured, but release dispatch still requires separate approval.
+The steps below document that completed one-time process; do not repeat staging or approval of `0.1.0`. Its bundled undated changelog and earlier bootstrap documentation were explicitly accepted unchanged. Subsequent releases use [Trusted Publishing](#trusted-publishing-setup), and each release dispatch still requires separate approval.
 
 The built-in publisher runs direct `npm publish`; it does not stage, approve, or reject packages. A pending stage blocks direct publication of the same version. Do not dispatch Actions for `0.1.0` while its stage exists or after it is published. Do not reject any candidate before the real `0.1.0` publication is verified. Reviewing this path does not authorize publication.
 
@@ -119,7 +119,7 @@ After registry confirmation, use a follow-up PR for the next development version
 
 ## Trusted Publishing Setup
 
-Setup for the [self-release caller](https://github.com/dblock/npm-package-release/blob/master/.github/workflows/self-release.yml) was explicitly authorized on November 11, 2026, for the unpublished `0.1.1`. The GitHub environment and effective default-branch rules were read back through the API. The maintainer saved the npm publisher through the website and checked all five fields below; this shell's CLI read-back remains gated by browser 2FA.
+Setup for the [self-release caller](https://github.com/dblock/npm-package-release/blob/master/.github/workflows/self-release.yml) was explicitly authorized on November 11, 2026. The GitHub environment and effective default-branch rules were read back through the API. After correcting a repository-name typo, the maintainer supplied CLI read-back matching the five npm fields below; successful `0.1.1` OIDC publication validated the publisher.
 
 | Setting | Configured Value |
 | --- | --- |
@@ -141,9 +141,11 @@ npm trust list npm-package-release --json --registry=https://registry.npmjs.org
 
 If `trust` is unknown, the terminal is using an older npm; use the package's npm website settings or activate the development tooling above. Do not install npm into this package's dependencies to obtain the CLI. npm checks the caller filename `self-release.yml`, not the called `release.yml`.
 
-The new publisher must complete its first successful publication within two days under the [current npm policy](https://docs.npmjs.com/trusted-publishers/), or it expires and must be recreated with setup authorization. Saved settings do not prove OIDC works; the first successful Actions publication validates the relationship. Trusted Publishing automatically supplies provenance for public packages from public GitHub repositories. Do not use `NODE_AUTH_TOKEN` or stored long-lived npm tokens.
+A new publisher must complete its first successful publication within two days under the [current npm policy](https://docs.npmjs.com/trusted-publishers/), or it expires and must be recreated with setup authorization. Saved settings alone do not prove OIDC works; the first successful Actions publication validates the relationship. Trusted Publishing automatically supplies provenance for public packages from public GitHub repositories. Do not use `NODE_AUTH_TOKEN` or stored long-lived npm tokens.
 
-The blocking PR requirement was removed from the default-branch ruleset with setup authorization so release and next-development commits can be pushed. Force-push/deletion protections remain active with no bypass actors. This permits fast-forward direct pushes by all writers, not only the workflow; ordinary development still requires PRs. Setup does not authorize dispatch, publication, or tags. Merge the reviewed setup documentation and separately authorize the release before dispatching `0.1.1`; never dispatch the already published `0.1.0`.
+The corrected publisher successfully published [`0.1.1`](https://www.npmjs.com/package/npm-package-release/v/0.1.1) through OIDC in [run 43103743175](https://github.com/dblock/npm-package-release/actions/runs/43103743175). Registry metadata identifies the trusted publisher and includes provenance. The public npm tarball, retained Actions archive, and [GitHub Release asset](https://github.com/dblock/npm-package-release/releases/tag/v0.1.1) are byte-identical with SHA-1 `438c2b6a8be7f4a15eb13df2677a65bae9e3162f`; the immutable tag points to release commit `70bf7cbf1b69ce9ba186026cb2fe989efaacc4db`. The job failed afterward while validating next-development files because a test expected the historical `0.1.0` documentation pin. Complete the missing `0.1.2` metadata in a reviewed PR; do not republish or move `v0.1.1`. Its published archive is unchanged.
+
+The blocking PR requirement was removed from the default-branch ruleset with setup authorization so release and next-development commits can be pushed. Force-push/deletion protections remain active with no bypass actors. This permits fast-forward direct pushes by all writers, not only the workflow; ordinary development still requires PRs. Setup does not authorize dispatch, publication, or tags. Dispatch only an unpublished version after separate release approval; never dispatch the already published `0.1.0` or `0.1.1`.
 
 ## Automated Self-release
 

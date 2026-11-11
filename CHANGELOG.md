@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 (Next)
+
+- [#27](https://github.com/dblock/npm-package-release/pull/27): Validate self-release documentation against its captured source instead of a fixed historical version and finish next-development metadata after the verified 0.1.1 publication - [@dblock](https://github.com/dblock).
+- Your contribution here.
+
 ## 0.1.1 (2026/11/11)
 
 - [#24](https://github.com/dblock/npm-package-release/pull/24): Document manual first-release approval and subsequent Trusted Publishing setup with command-first consumer instructions, verified release metadata, the npm version badge, and an npm-compatible README logo URL - [@dblock](https://github.com/dblock).
