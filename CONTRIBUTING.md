@@ -24,9 +24,11 @@ Execution tests cover immutable domain data, scoped local/GitHub/custom provider
 
 Checkpoint tests restore the actual bundle/archive in a fresh checkout, ignore forged diagnostic phases, and exercise ambiguous publication acceptance, failed pushes, repeated completion, immutable evidence, and output conflicts. The installed Actions fixture executes prepare/complete commands from both YAML interfaces, checks that a successful required upload separates them, and preserves a separate checkpoint copy before publication. Simulated copies do not prove live artifact upload; never dispatch a publishing workflow to test it.
 
+Self-release fixtures copy the root `npr.config.js` unchanged into isolated projects containing the compiled SDK and real runtime dependencies. Source and installed-tarball checks release a version different from the source manifest, validate the actual installed API/CLI, and repeat checkpoint completion without a second publication. A broken SDK archive must fail before publication/tagging. Fixture smoke tests do not replace this repository's full source tests or lint; registry/hosting remain simulated.
+
 Initial release implementation should approach full line and branch coverage of project-owned runtime code with meaningful behavior tests, including subprocesses and error paths; report remaining gaps rather than hiding code or adding trivial assertions. Simulate publication and hosting, but exercise real Git remotes, npm archives, and consumer installation. Consumer checks do not validate live Actions authentication or artifact uploads.
 
-Coverage maps compiled execution back to TypeScript. Exclude only the empty JavaScript generated from `contracts.ts`, which contains interfaces/types and no executable implementation; its guarantees are checked by contract fixtures rather than runtime coverage.
+Coverage includes the root release configuration and maps compiled execution back to TypeScript. Exclude only the empty JavaScript generated from `contracts.ts`, which contains interfaces/types and no executable implementation; its guarantees are checked by contract fixtures rather than runtime coverage.
 
 Keep `Test`, `Lint`, and `Package` workflows separate. Use explicit `matrix.entry` lists of compact inline objects, not `include`/`exclude` or Cartesian axes. Maintain Coveralls coverage upload; JavaScript Danger checks are not configured.
 

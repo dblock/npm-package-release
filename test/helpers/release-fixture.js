@@ -57,8 +57,9 @@ export async function releaseFixture(t, settings = {}) {
     if (program === "npm" && args[0] === "view") {
       lookups.push(args[1]);
       if (settings.registryError) throw settings.registryError;
-      if (published.length && ++visibleLookups > (settings.missingLookups ?? 0)) {
-        return JSON.stringify(settings.viewArray ? [published[0]] : published[0]);
+      const metadata = published.find(({ name, version }) => `${name}@${version}` === args[1]);
+      if (metadata && ++visibleLookups > (settings.missingLookups ?? 0)) {
+        return JSON.stringify(settings.viewArray ? [metadata] : metadata);
       }
       if (settings.alreadyPublished) return JSON.stringify({ name: manifest.name, version: "0.1.0" });
       throw Object.assign(new Error("Version not found"), { stdout: '{"error":{"code":"E404"}}', code: 1 });
