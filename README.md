@@ -13,7 +13,7 @@ One dispatch updates the changelog, tests and publishes the package, creates its
 Requires Node.js 22.14+ and npm 11.5.1+; the release workflow defaults to Node.js 26/npm 12.
 
 ```sh
-npm install --save-dev --save-exact npm-package-release@0.1.0
+npm install --save-dev --save-exact npm-package-release@0.1.1
 ```
 
 The CLI is `npr`, but do not install the unrelated npm package `npr`.
@@ -55,7 +55,7 @@ permissions:
 
 jobs:
   release:
-    uses: dblock/npm-package-release/.github/workflows/release.yml@v0.1.0
+    uses: dblock/npm-package-release/.github/workflows/release.yml@v0.1.1
     with:
       version: ${{ inputs.version }}
 ```

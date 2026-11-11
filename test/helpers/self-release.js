@@ -67,7 +67,8 @@ export async function checkSelfRelease(t, packageRoot, configuredWorkflow) {
   assert.equal(await fixture.git("status", "--porcelain"), "");
   assert.equal((await fixture.git("rev-parse", "v3.2.1")).trim(), result.releaseCommit);
   for (const path of ["README.md", "docs/usage.md"]) {
-    assert.match(await fixture.git("show", `v3.2.1:${path}`), /npm-package-release@0\.1\.0/u);
+    assert.equal(await fixture.git("show", `v3.2.1:${path}`),
+      await fixture.git("show", `${result.initialCommit}:${path}`));
     assert.match(await fixture.git("show", `master:${path}`), /npm-package-release@3\.2\.1/u);
     assert.doesNotMatch(await readFile(join(fixture.cwd, path), "utf8"), /npm-package-release@3\.2\.2/u);
   }
