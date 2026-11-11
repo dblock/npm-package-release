@@ -1,6 +1,6 @@
 # Releasing
 
-This guide covers maintaining `npm-package-release`. To configure your own package, follow [README](README.md#usage) and [Detailed Usage](docs/usage.md#new-project-setup). Consumer examples target `0.1.0`; this documentation does not authorize publication, credentials, tags, publisher setup, or protection changes.
+This guide covers maintaining `npm-package-release`. To configure your own package, follow [README](README.md#usage) and [Detailed Usage](docs/usage.md#new-project-setup). Consumer examples target `0.1.0`; this documentation does not authorize staging, rejecting staged packages, publication, credentials, tags, publisher setup, or protection changes.
 
 ## Version and Validation
 
@@ -16,7 +16,98 @@ Build before invoking the checkout's CLI with `node bin/npr.js`. The configurati
 
 Do not invoke `release` or `prepare` as a read-only preview: they edit files and create local commits/tags, and `release` also publishes and pushes. The reusable `release.yml` accepts `workflow_call` for consumers and this library itself. This repository's manually dispatched `self-release.yml` calls it locally with `build: true`; there is no repository-variable gate. Do not dispatch until the setup below is verified and publication is explicitly authorized.
 
-## Manual Publication
+## First Release by Manual Approval
+
+The first release is complete: [`0.1.0` on npm](https://www.npmjs.com/package/npm-package-release/v/0.1.0) was manually approved on November 11, 2026, and `latest` points to it. The [`v0.1.0` tag/GitHub Release](https://github.com/dblock/npm-package-release/releases/tag/v0.1.0) identifies the archive's actual source commit, `86e51cb4a5f1177caa0e9630a335cbe52b5add9f`. Downloaded registry and GitHub Release archives are byte-identical to the validated archive; both checksums below match. No stage remains, and no rejection or placeholder deletion was needed.
+
+The steps below document that completed one-time process; do not repeat staging or approval of `0.1.0`. Its bundled undated changelog and earlier bootstrap documentation were explicitly accepted unchanged. The repository now prepares `0.1.1`; [Trusted Publishing setup](#trusted-publishing-setup) is still required before an automated release.
+
+The built-in publisher runs direct `npm publish`; it does not stage, approve, or reject packages. A pending stage blocks direct publication of the same version. Do not dispatch Actions for `0.1.0` while its stage exists or after it is published. Do not reject any candidate before the real `0.1.0` publication is verified. Reviewing this path does not authorize publication.
+
+### 1. Check Tools and Authenticate
+
+Activate Node.js 26 and npm 12 using your version manager. Staging and `npm trust` require npm 11.15.0 or later; the repository uses npm 12 for development and release validation. Enable account-level npm 2FA and authenticate in your own terminal:
+
+```sh
+node --version
+npm --version
+npm login --registry=https://registry.npmjs.org
+npm whoami --registry=https://registry.npmjs.org
+```
+
+Complete browser authentication and 2FA yourself; never put tokens, passwords, recovery codes, or authentication links in the PR or chat. `npm whoami` confirms the local session only, not future Actions OIDC permissions. Stop here until the expected tooling and account access are confirmed.
+
+### 2. Validate and Retain the Candidate
+
+Use reviewed source from a clean checkout, keep the unpublished version at `0.1.0`, and follow [Version and Validation](#version-and-validation). Retain the archive, pack metadata, and source commit outside the source tree. Normally prepare dated release metadata before packing, as described in [Manual Publication Alternative](#manual-publication-alternative). The existing stage is already packed; its metadata exception is described in step 4. Do not rebuild it or run `npr prepare` as a preview.
+
+For a new candidate only, create a retained directory and test its exact archive after validation:
+
+```sh
+bootstrap_dir="$(mktemp -d "${TMPDIR:-/tmp}/npr-bootstrap.XXXXXX")"
+npm pack --json --pack-destination "$bootstrap_dir" > "$bootstrap_dir/pack.json"
+PACKAGE_ARCHIVE="$bootstrap_dir/npm-package-release-0.1.0.tgz" npm run test:package
+```
+
+Inspect `pack.json` and the archive contents, and record the source commit with its SHA-512 integrity and SHA-1 checksum. The archive override prevents the consumer test from repacking a different candidate. Keep the directory through publication and verification; move it to durable storage if necessary. These commands do not stage or publish anything.
+
+### 3. Stage Without Approving
+
+With explicit staging approval, upload the retained candidate, substituting its real absolute path. The current candidate has already been staged; inspect it rather than repeating the upload:
+
+```sh
+npm stage publish /absolute/path/npm-package-release-0.1.0.tgz --tag bootstrap --access public --ignore-scripts --registry=https://registry.npmjs.org
+npm stage list npm-package-release --json --registry=https://registry.npmjs.org
+npm stage view STAGE_ID_FROM_OUTPUT --registry=https://registry.npmjs.org
+```
+
+Record the returned stage ID and inspect its package name, version, tag, and checksum. Confirm the registry contains the expected placeholder and that `0.1.0` is staged, not publicly released. The placeholder is public even though the candidate contents are private. Do not approve without separate publication authorization, stage another copy after an ambiguous error, or create another placeholder blindly; inspect actual registry/stage state first.
+
+A successful upload can initially report `status: validating`; let npm finish its checks and inspect the stage again before continuing. Staged metadata exposes `shasum`, which must match the retained pack metadata; also keep the local archive's SHA-512 integrity. The public placeholder may receive the `latest` tag, so verify the explicit `0.1.0` version rather than treating `latest` as a real release.
+
+### 4. Review the Existing Stage
+
+The selected stage is `5f66f54b-f3dd-485b-af59-8dace067b438`, package `npm-package-release@0.1.0`, tag `bootstrap`, from source commit `86e51cb4a5f1177caa0e9630a335cbe52b5add9f`. Its SHA-1 is `02712fde2ef814f7410596cf86d9772176586723`; its SHA-512 integrity is `sha512-2C8QBLeCCAlOPV/6PjbIfFZBXl0K5baxfu0Swuxo1e0MOH0dAqwOAOZXBwcCjVpK4260cALwl+LZR6Vp8tvXWA==`.
+
+Read its current status and download into an owned review directory:
+
+```sh
+npm stage view 5f66f54b-f3dd-485b-af59-8dace067b438 --json --registry=https://registry.npmjs.org
+review_dir="$(mktemp -d "${TMPDIR:-/tmp}/npr-stage-review.XXXXXX")"
+(cd "$review_dir" && npm stage download 5f66f54b-f3dd-485b-af59-8dace067b438 --registry=https://registry.npmjs.org)
+```
+
+Use the saved filename printed by `download`, which includes the stage ID, not just the filename in its metadata. The downloaded bytes match the retained, tested archive, including both checksums; all 54 compiled files match the current build. Its source differs from merged `master` only in the initial documentation changes for PR #24. Coverage, strict-engine installed-consumer checks, all 98 tests, and lint passed.
+
+The immutable archive contains `## 0.1.0 (Next)`, its contribution placeholder, and the earlier bootstrap instructions. Those documentation limitations require explicit acceptance before publication. Editing this guide, dating the repository changelog later, or creating a GitHub Release will not alter the staged bytes. Approval will be a manual first release, not evidence of CI/OIDC publication or provenance. If these limitations are unacceptable, stop without approving or rejecting the stage.
+
+### 5. Approve, Verify, and Promote
+
+Only after explicit publication authorization and acceptance of the archive limitations, approve the exact stage in your own terminal and complete browser 2FA. This command publishes the real `0.1.0`:
+
+```sh
+npm stage approve 5f66f54b-f3dd-485b-af59-8dace067b438 --registry=https://registry.npmjs.org
+npm view npm-package-release@0.1.0 --json --registry=https://registry.npmjs.org
+```
+
+Verify explicit name/version, `dist.shasum`, and `dist.integrity` against the retained archive. Missing-version visibility can lag publication; do not approve or publish again after an ambiguous result. Inspect the stage and registry instead.
+
+The stage's tag is immutable: approval publishes under `bootstrap`, so `latest` may still point to `0.0.0-stage`. After checksum verification and separate tag-update authorization, promote the real version:
+
+```sh
+npm dist-tag add npm-package-release@0.1.0 latest --registry=https://registry.npmjs.org
+npm view npm-package-release dist-tags --json --registry=https://registry.npmjs.org
+```
+
+Confirm `latest` resolves to the same verified `0.1.0`. Approval consumes the selected stage; no rejection is needed to complete this release. Do not unpublish the placeholder as cleanup: [removing all published versions](https://docs.npmjs.com/policies/unpublish/) triggers a 24-hour publication block. Any later rejection or removal requires separate approval.
+
+### 6. Finish Release Metadata and Configure Automation
+
+After registry confirmation, separately authorize the matching Git tag/GitHub Release and use a reviewed PR for dated repository notes, the next development version `0.1.1`, and the npm version badge. Preserve the archive's actual source identity when choosing a tag target; do not pretend later documentation edits were included in the published archive. Never overwrite the archive or published version to repair its bundled documentation.
+
+Then obtain separate setup approval and follow [Trusted Publishing Setup](#trusted-publishing-setup) for subsequent releases. Configure the `release` environment restricted to `master`, owner `dblock`, repository `npm-package-release`, caller `self-release.yml`, and direct publication permission. Inspect effective protections before authorizing any removal of blocking PR requirements; retain force-push/deletion protections and no bypass actors. Configure the publisher when a subsequent release can complete within its two-day activation window.
+
+## Manual Publication Alternative
 
 After explicit release authorization, prepare a release-metadata PR through normal review: select an unpublished version, synchronize the manifest/lockfile, date its changelog heading, and remove the placeholder. After merging, record the clean default-branch commit and save the reviewed notes alongside the retained archive.
 
@@ -28,7 +119,14 @@ After registry confirmation, use a follow-up PR for the next development version
 
 ## Trusted Publishing Setup
 
-The [self-release caller](https://github.com/dblock/npm-package-release/blob/master/.github/workflows/self-release.yml) is implemented in advance of the initial publication. Before dispatching, verify the first manual release and explicitly authorize the publisher/environment/protection setup below. No enablement variable is required.
+The [self-release caller](https://github.com/dblock/npm-package-release/blob/master/.github/workflows/self-release.yml) publishes subsequent releases after the verified manual first publication. Before dispatching, select a new unpublished version with no conflicting pending stage and explicitly authorize the publisher/environment/protection setup below. Do not dispatch `0.1.0` after manually approving it. No enablement variable is required.
+
+With setup approval, configure and read back the npm publisher:
+
+```sh
+npm trust github npm-package-release --file self-release.yml --repo dblock/npm-package-release --env release --allow-publish --registry=https://registry.npmjs.org
+npm trust list npm-package-release --json --registry=https://registry.npmjs.org
+```
 
 Configure a `release` environment restricted to the default branch and the npm GitHub Actions trusted publisher for owner `dblock`, repository `npm-package-release`, calling workflow filename `self-release.yml`, environment `release`, and direct `npm publish` permission. Both caller and reusable workflow grant `contents: write` and `id-token: write`; the reusable workflow uses a GitHub-hosted runner. npm checks the caller filename, not the called `release.yml`. Newly configured publishers must complete a successful publication within two days under the [current npm policy](https://docs.npmjs.com/trusted-publishers/); configuration alone does not prove OIDC works.
 
