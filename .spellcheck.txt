@@ -4,6 +4,7 @@ CLI
 Doubrovkine
 ESM
 Intridea
+Lifecycle
 LCOV
 OIDC
 dblock

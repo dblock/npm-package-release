@@ -8,6 +8,10 @@ export type { ReleaseCheckpoint } from "./checkpoint.js";
 export { releaseChangelog, nextChangelog } from "./changelog.js";
 export type * from "./contracts.js";
 export { Workflow } from "./workflow.js";
+export { LifecycleHooks } from "./lifecycle.js";
+export type {
+  LifecycleHook, LifecycleContext, LifecycleStages, LifecycleStage, HookTiming, LifecycleHookFailure, LifecycleFailure,
+} from "./lifecycle.js";
 export type { Step, StepEvent, WorkflowObserver, WorkflowRunOptions } from "./workflow.js";
 export { Release } from "./release-description.js";
 export type { ReleaseDescription } from "./release-description.js";

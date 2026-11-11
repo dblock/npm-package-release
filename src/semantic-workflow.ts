@@ -1,7 +1,8 @@
 import process from "node:process";
 import { command } from "./command.js";
 import { Workflow } from "./workflow.js";
-import { checkpointRelease, finishRelease, preparationObserver } from "./release.js";
+import { checkpointRelease, finishRelease } from "./release.js";
+import { lifecycleOptions } from "./lifecycle.js";
 import { snapshot } from "./services.js";
 import { GitHistory, SemanticRelease, semanticPlan } from "./semantic.js";
 import {
@@ -69,7 +70,7 @@ export class InitializeSemanticRelease implements Step<AnalyzedReleaseOptions, I
       ...input.state, semantic: semanticPlan({ decision: analysis, nextDevelopment: this.config.nextDevelopment ?? false }),
     });
     const runtime = new ReleaseRuntime(config, input.runtime.cwd, input.runtime.run, input.runtime.log,
-      input.runtime.env, input.runtime.services, state, input.runtime.provider);
+      input.runtime.env, input.runtime.services, state, input.runtime.provider, input.runtime.lifecycle);
     await runtime.services.store.save(state);
     return Object.freeze({ ...input, state, runtime });
   }
@@ -108,12 +109,12 @@ export class SemanticReleaseWorkflow implements Step<ReleaseOptions, ReleaseStat
   }
 
   async run(options: ReleaseOptions = {}, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<ReleaseState> {
-    return this.workflow.run({ ...options, observer: options.observer || this.config.observer }, execution, provider);
+    return this.workflow.run(lifecycleOptions(this.config, options), execution, provider);
   }
   async prepare(options: ReleaseOptions = {}): Promise<BuiltRelease> {
-    return this.preparation.run({ ...options, observer: preparationObserver(options.observer || this.config.observer) });
+    return this.preparation.run(lifecycleOptions(this.config, options, false));
   }
   async complete(options: ReleaseOptions = {}): Promise<ReleaseState> {
-    return this.completion.run({ ...options, observer: options.observer || this.config.observer });
+    return this.completion.run(lifecycleOptions(this.config, options));
   }
 }

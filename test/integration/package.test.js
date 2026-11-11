@@ -14,6 +14,7 @@ import { command } from "../../dist/command.js";
 import { checkComposition, checkDefaultChangelog } from "../helpers/composition.js";
 import { checkSemanticRelease } from "../helpers/semantic.js";
 import { checkSelfRelease } from "../helpers/self-release.js";
+import { checkLifecycle } from "../helpers/lifecycle.js";
 
 test("the actual tarball installs with strict engines and exposes its API and CLI", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "npm-package-release-consumer-"));
@@ -53,6 +54,9 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   for (const file of [
     "package/dist/index.js",
     "package/dist/index.d.ts",
+    "package/dist/lifecycle.js",
+    "package/dist/lifecycle.d.ts",
+    "package/docs/hooks.md",
     "package/bin/npr.js",
     "package/README.md",
     "package/LICENSE",
@@ -78,12 +82,13 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   const installedApi = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/dist/index.js")).href);
   await checkComposition(t, installedApi);
   await checkDefaultChangelog(t, installedApi);
+  await checkLifecycle(t, installedApi);
   await checkSemanticRelease(t, installedApi);
   await checkSelfRelease(t, join(consumer, "node_modules/npm-package-release"));
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, complete, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator } from "npm-package-release";
-import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, CheckpointWorkflow } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, complete, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks } from "npm-package-release";
+import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, CheckpointWorkflow, LifecycleHook, LifecycleContext } from "npm-package-release";
 class Inspect implements Step<PreparedRelease, PreparedRelease> {
   readonly id = "inspect";
   async run(input: PreparedRelease, execution?: ExecutionContext) {
@@ -106,6 +111,29 @@ export const semantic = new SemanticReleaseWorkflow({ nextDevelopment: false });
 semantic satisfies CheckpointWorkflow;
 new ReleaseWorkflow({ changelog: new KeepAChangelog("docs/HISTORY.md"), validator: new HookValidator() });
 new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
+class CheckBuild implements LifecycleHook<"build", "after"> {
+  readonly id = "check-build";
+  async run({ output }: LifecycleContext<"build", "after">) {
+    output.state.artifact.integrity satisfies string;
+  }
+}
+const hooks = new LifecycleHooks().after("build", new CheckBuild());
+new ReleaseWorkflow({ hooks });
+new SemanticReleaseWorkflow({ hooks });
+export function hookPayloads(beforeInitialize: LifecycleContext<"initialize", "before">,
+  preparation: LifecycleContext<"prepare" | "next", "before" | "after">,
+  afterBuild: LifecycleContext<"build", "after">) {
+  beforeInitialize.input.version satisfies string | undefined;
+  preparation.context.version satisfies string;
+  // @ts-expect-error Hook payloads no longer expose an ambiguous value property.
+  String(afterBuild.value);
+  // @ts-expect-error Preparation hooks expose context, not step output.
+  String(preparation.output);
+}
+// @ts-expect-error Before-build hooks cannot assume an archive exists.
+hooks.before("build", new CheckBuild());
+// @ts-expect-error Hook stage types cannot be interchanged.
+hooks.after("prepare", new CheckBuild());
 // @ts-expect-error Format objects are not changelog implementations.
 new ReleaseWorkflow({ changelog: { format: "intridea" } });
 // @ts-expect-error Release calls require workflow instances.

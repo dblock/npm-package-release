@@ -4,9 +4,10 @@ import { command } from "./command.js";
 import { Git } from "./git.js";
 import { NpmPackage } from "./package.js";
 import { Workflow } from "./workflow.js";
+import { lifecycleOptions } from "./lifecycle.js";
 import { currentExecutionProvider } from "./execution.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
-import type { Step, WorkflowObserver } from "./workflow.js";
+import type { Step } from "./workflow.js";
 import type { ReleaseConfig, ReleaseOptions, ReleaseState, VerifyOptions } from "./contracts.js";
 import {
   DirectoryReleaseStore, HookValidator, NumericPatchVersions, RegistryVisibility,
@@ -33,15 +34,6 @@ export function finishRelease(workflow: Workflow<ReleaseOptions, BuiltRelease>, 
   return nextDevelopment ? hosted.then(new PrepareNextVersion()).then(new VerifyRelease()) : hosted.then(new VerifyRelease());
 }
 
-export function preparationObserver(observer?: WorkflowObserver): WorkflowObserver | undefined {
-  if (!observer) return undefined;
-  return {
-    async started(event) { await observer.started?.(event); },
-    async completed(event) { await observer.completed?.(event); },
-    async failed(event) { await observer.failed?.(event); },
-  };
-}
-
 export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   readonly id = "npm-release";
   readonly workflow: Workflow<ReleaseOptions, ReleaseState>;
@@ -57,15 +49,15 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   }
 
   async run(options: ReleaseOptions = {}, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<ReleaseState> {
-    return this.workflow.run({ ...options, observer: options.observer || this.config?.observer }, execution, provider);
+    return this.workflow.run(lifecycleOptions(this.config, options), execution, provider);
   }
 
   async prepare(options: ReleaseOptions = {}): Promise<BuiltRelease> {
-    return this.preparation.run({ ...options, observer: preparationObserver(options.observer || this.config?.observer) });
+    return this.preparation.run(lifecycleOptions(this.config, options, false));
   }
 
   async complete(options: ReleaseOptions = {}): Promise<ReleaseState> {
-    return this.completion.run({ ...options, observer: options.observer || this.config?.observer });
+    return this.completion.run(lifecycleOptions(this.config, options));
   }
 }
 

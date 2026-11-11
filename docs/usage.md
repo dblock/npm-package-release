@@ -99,6 +99,7 @@ Replace `example` with the package's public API and check its actual behavior. T
 
 | Option | Default | Behavior |
 | --- | --- | --- |
+| `hooks` | No lifecycle hooks | An immutable `LifecycleHooks` instance registering ordered hook classes; see [Lifecycle Hooks](hooks.md). |
 | `changelog` | `new KeepAChangelog()` | `new KeepAChangelog(path)`, `new IntrideaChangelog(path)`, a custom `Changelog`, or `null`. Paths default to `CHANGELOG.md` and resolve relative to the invocation's `cwd`. |
 | `branch` | Actions default branch or remote symbolic HEAD | Must match the checked-out branch and current remote tip. |
 | `remote` | `origin` | Named Git remote, used for concurrency checks and atomic pushes. |
