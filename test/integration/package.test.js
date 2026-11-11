@@ -111,6 +111,10 @@ export const semantic = new SemanticReleaseWorkflow({ nextDevelopment: false });
 semantic satisfies CheckpointWorkflow;
 new ReleaseWorkflow({ changelog: new KeepAChangelog("docs/HISTORY.md"), validator: new HookValidator() });
 new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
+new KeepAChangelog("CHANGELOG.md", { placeholder: "* Contribute.", sections: ["Added", "Fixed"] });
+new IntrideaChangelog("CHANGELOG.md", { placeholder: "* Contribute." });
+// @ts-expect-error Template sections require an array.
+new KeepAChangelog("CHANGELOG.md", { sections: "Added" });
 class CheckBuild implements LifecycleHook<"build", "after"> {
   readonly id = "check-build";
   async run({ output }: LifecycleContext<"build", "after">) {

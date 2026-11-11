@@ -81,7 +81,6 @@ test("ambiguous headings, placeholders, and already released headings fail befor
   for (const source of [
     intridea + "\n## 0.2.0 (Next)\n",
     intridea.replace("- Your contribution here.\n", ""),
-    intridea + "- Your contribution here.\n",
     intridea + "\n## 0.1.0 (2025/01/01)\n",
   ]) assert.throws(() => releaseChangelog(source, { ...options, format: "intridea" }));
   assert.throws(() => releaseChangelog(intridea, { ...options, format: "unknown" }), /Unknown/u);
@@ -94,6 +93,71 @@ test("ambiguous headings, placeholders, and already released headings fail befor
   assert.throws(() => nextChangelog(released, {
     format: "bad", version: "0.1.1", releasedVersion: "0.1.0",
   }), /Unknown/u);
+});
+
+test("categorized Intridea notes remove all prompts and recreate only one-level headings", () => {
+  const source = "### 0.1.0 (Next)\r\n\r\n#### Added\r\n\r\n- Ship caf\u00e9.\r\n* Contribute.\r\n\r\n" +
+    "##### Details\r\n\r\n- Keep nested details.\r\n\r\n#### Fixed\r\n\r\n* Contribute.\r\n";
+  const released = releaseChangelog(source, {
+    ...options, format: "intridea", placeholder: "* Contribute.",
+  });
+  assert.doesNotMatch(released.notes, /Contribute/u);
+  assert.match(released.notes, /caf\u00e9/u);
+  const next = nextChangelog(released.source, {
+    format: "intridea", version: "0.1.1", releasedVersion: "0.1.0", placeholder: "* Contribute.",
+  });
+  const pending = next.slice(0, next.indexOf("### 0.1.0"));
+  assert.equal(pending, "### 0.1.1 (Next)\r\n\r\n#### Added\r\n\r\n* Contribute.\r\n\r\n#### Fixed\r\n\r\n* Contribute.\r\n\r\n");
+  assert.doesNotMatch(pending, /Details|caf/u);
+});
+
+test("Keep a Changelog templates clean prompts and empty categories without losing references or examples", () => {
+  const source = keep.replace("### Added", "### Fixed\n\n* Contribute.\n\n### Added")
+    .replace("- Ship a package.", "- Ship a package.\n* Contribute.\n\n```md\n* Contribute.\n```\n\n> * Contribute.");
+  const released = releaseChangelog(source, {
+    ...options, format: "keep-a-changelog", placeholder: "* Contribute.", sections: ["Added", "Fixed"],
+  });
+  assert.doesNotMatch(released.notes, /### Fixed/u);
+  assert.match(released.notes, /```md\n\* Contribute\.\n```/u);
+  assert.match(released.notes, /> \* Contribute\./u);
+  assert.match(released.source, /\[Unreleased\]: .*v0\.1\.0\.\.\.master/u);
+  const next = nextChangelog(released.source, {
+    format: "keep-a-changelog", version: "0.1.1", releasedVersion: "0.1.0",
+    placeholder: "* Contribute.", sections: ["Added", "Fixed"],
+  });
+  assert.ok(next.startsWith("# Changelog\n\n## [Unreleased]\n\n### Added\n\n* Contribute.\n\n### Fixed\n\n* Contribute.\n\n"));
+  assert.equal(nextChangelog(next, {
+    format: "keep-a-changelog", version: "0.1.1", releasedVersion: "0.1.0", sections: ["Other"],
+  }), next);
+  assert.throws(() => releaseChangelog("## [Unreleased]\n\n### Fixed\n\n* Contribute.\n", {
+    ...options, format: "keep-a-changelog", placeholder: "* Contribute.",
+  }), /empty/u);
+});
+
+test("class templates are validated, copied and fail without writing empty release notes", async (t) => {
+  const cwd = await mkdtemp(join(tmpdir(), "npr-template-"));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const source = "## [Unreleased]\n\n### Added\n\n- Ship.\n* Contribute.\n";
+  const path = join(cwd, "CHANGELOG.md");
+  await writeFile(path, source);
+  const sections = ["Added", "Fixed"];
+  const changelog = new KeepAChangelog(path, { placeholder: "* Contribute.", sections });
+  sections.push("Changed");
+  await changelog.release({ ...options, cwd });
+  await changelog.next({ version: "0.1.1", releasedVersion: "0.1.0", cwd });
+  assert.doesNotMatch((await readFile(path, "utf8")), /### Changed/u);
+  const before = await readFile(path, "utf8");
+  assert.match(before, /### Fixed\n\n\* Contribute\./u);
+  await assert.rejects(changelog.release({ ...options, version: "0.1.1", cwd }), /empty/u);
+  assert.equal(await readFile(path, "utf8"), before);
+  for (const template of [
+    { placeholder: "" }, { placeholder: " \n" }, { sections: "Added" },
+    { sections: ["Added", "Added"] }, { sections: ["\n"] }, { sections: null },
+  ]) assert.throws(() => new KeepAChangelog(path, template));
+  assert.throws(() => new IntrideaChangelog(path, { placeholder: null }));
+  assert.throws(() => nextChangelog("###### [0.1.0] - 2026-11-09\n\n- Ship.\n", {
+    format: "keep-a-changelog", version: "0.1.1", releasedVersion: "0.1.0", sections: ["Added"],
+  }), /level six/u);
 });
 
 test("Keep a Changelog supports no comparison reference and rejects unsupported/duplicate references", () => {

@@ -5,6 +5,26 @@ import { numericVersion } from "./command.js";
 import type { Nodes } from "mdast";
 import type { ChangelogFormat } from "./contracts.js";
 
+export interface ChangelogTemplate {
+  readonly placeholder?: string | null;
+  readonly sections?: readonly string[];
+}
+
+export function changelogTemplate(format: ChangelogFormat, template: ChangelogTemplate = {}): ChangelogTemplate {
+  const placeholder = template.placeholder === undefined && format === "intridea"
+    ? "- Your contribution here." : template.placeholder;
+  const singleLine = (text: unknown): text is string =>
+    typeof text === "string" && Boolean(text.trim()) && !/[\r\n]/u.test(text);
+  if ((placeholder != null && !singleLine(placeholder)) || (format === "intridea" && placeholder === null)) {
+    throw new Error("Contribution placeholder must be a nonempty single line.");
+  }
+  const sections = template.sections === undefined ? [] : template.sections;
+  if (!Array.isArray(sections) || !sections.every(singleLine) || new Set(sections).size !== sections.length) {
+    throw new Error("Changelog sections must be unique nonempty single-line names.");
+  }
+  return Object.freeze({ placeholder, sections: Object.freeze([...sections]) });
+}
+
 function document(source: string) {
   return fromMarkdown(source, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
 }
@@ -42,6 +62,46 @@ function replace(source: string, edits: [number, number, string][]) {
   return source;
 }
 
+function contributionLines(source: string, placeholder: string) {
+  const excluded: [number, number][] = [];
+  function visit(node: Nodes) {
+    if (["code", "blockquote", "html"].includes(node.type)) {
+      excluded.push([node.position!.start.offset!, node.position!.end.offset!]);
+    } else if ("children" in node) node.children.forEach(visit);
+  }
+  visit(document(source));
+  return [...source.matchAll(/[^\r\n]+(?:\r?\n|$)/gu)].filter((line) =>
+    line[0].replace(/\r?\n$/u, "") === placeholder &&
+    !excluded.some(([start, end]) => line.index >= start && line.index < end),
+  );
+}
+
+function cleanNotes(source: string, depth: number, template: ChangelogTemplate, required: boolean) {
+  if (template.placeholder) {
+    const prompts = contributionLines(source, template.placeholder);
+    if (required && !prompts.length) throw new Error("Expected at least one contribution placeholder.");
+    source = replace(source, prompts.map((line) => [line.index, line.index + line[0].length, ""]));
+  }
+  if (!required && (template.placeholder || template.sections?.length)) {
+    const allHeadings = headings(source);
+    const categories = allHeadings.filter(({ node }) => node.depth === depth + 1);
+    const edits: [number, number, string][] = [];
+    for (const { node } of categories) {
+      const start = node.position!.start.offset!;
+      const body = node.position!.end.offset!;
+      const end = allHeadings.find(({ node: other }) =>
+        other.position!.start.offset! > start && other.depth <= node.depth,
+      )?.node.position!.start.offset ?? source.length;
+      if (!document(source.slice(body, end)).children.some(hasNotes)) {
+        const newline = source.indexOf("\n", body);
+        edits.push([start, newline < 0 ? body : newline + 1, ""]);
+      }
+    }
+    source = replace(source, edits);
+  }
+  return source;
+}
+
 function compareReference(source: string, version: string) {
   const definitions = document(source).children.filter((node) => node.type === "definition");
   const references = definitions.filter((node) => node.identifier.toLowerCase() === "unreleased");
@@ -58,25 +118,18 @@ function compareReference(source: string, version: string) {
   ]]);
 }
 
-export function releaseChangelog(source: string, { format, version, date }: { format: ChangelogFormat; version: string; date: string }) {
+export function releaseChangelog(source: string, { format, version, date, ...options }:
+  ChangelogTemplate & { format: ChangelogFormat; version: string; date: string }) {
   numericVersion(version);
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Expected a YYYY-MM-DD release date.");
   if (!["intridea", "keep-a-changelog"].includes(format)) throw new Error("Unknown changelog format.");
   const intridea = format === "intridea";
+  const template = changelogTemplate(format, options);
   const current = section(source, intridea ? /^\d+\.\d+\.\d+ \(Next\)$/u : /^\[Unreleased\]$/u);
   if (headings(source).some(({ text }) =>
     intridea ? text.startsWith(`${version} (`) && !text.endsWith("(Next)") : text.startsWith(`[${version}] - `),
   )) throw new Error("Release heading already exists.");
-  let notes = source.slice(current.body, current.end);
-  if (intridea) {
-    const items = document(notes).children.filter((node) => node.type === "list").flatMap((node) => node.children);
-    const placeholders = items.filter((node) =>
-      notes.slice(node.position!.start.offset!, node.position!.end.offset!).trim() === "- Your contribution here.",
-    );
-    if (placeholders.length !== 1) throw new Error("Expected exactly one contribution placeholder.");
-    const placeholder = placeholders[0];
-    notes = replace(notes, [[placeholder.position!.start.offset!, placeholder.position!.end.offset!, ""]]);
-  }
+  const notes = cleanNotes(source.slice(current.body, current.end), current.node.depth, template, intridea);
   if (!document(notes).children.some(hasNotes)) throw new Error("Release notes must not be empty.");
   const heading = `${"#".repeat(current.node.depth)} ${intridea
     ? `${version} (${date.replaceAll("-", "/")})`
@@ -86,11 +139,13 @@ export function releaseChangelog(source: string, { format, version, date }: { fo
   return { source: updated, notes: notes.trim() };
 }
 
-export function nextChangelog(source: string, { format, version, releasedVersion }: { format: ChangelogFormat; version: string; releasedVersion: string }) {
+export function nextChangelog(source: string, { format, version, releasedVersion, ...options }:
+  ChangelogTemplate & { format: ChangelogFormat; version: string; releasedVersion: string }) {
   numericVersion(version);
   numericVersion(releasedVersion);
   const intridea = format === "intridea";
   if (!["intridea", "keep-a-changelog"].includes(format)) throw new Error("Unknown changelog format.");
+  const template = changelogTemplate(format, options);
   const current = section(source, new RegExp(intridea
     ? `^${releasedVersion.replaceAll(".", "\\.")} \\(\\d{4}/\\d{2}/\\d{2}\\)$`
     : `^\\[${releasedVersion.replaceAll(".", "\\.")}\\] - \\d{4}-\\d{2}-\\d{2}$`, "u"));
@@ -103,6 +158,19 @@ export function nextChangelog(source: string, { format, version, releasedVersion
   }
   const newline = source.includes("\r\n") ? "\r\n" : "\n";
   const heading = `${"#".repeat(current.node.depth)} ${intridea ? `${version} (Next)` : "[Unreleased]"}`;
-  const prefix = intridea ? `${heading}${newline}${newline}- Your contribution here.${newline}${newline}` : `${heading}${newline}${newline}`;
+  const categories = intridea ? headings(source).filter(({ node }) =>
+    node.depth === current.node.depth + 1 && node.position!.start.offset! >= current.body &&
+    node.position!.start.offset! < current.end,
+  ).map(({ node }) => source.slice(node.position!.start.offset!, node.position!.end.offset!)) :
+    (template.sections ?? []).map((name) => `${"#".repeat(current.node.depth + 1)} ${name}`);
+  if (current.node.depth === 6 && categories.length) throw new Error("Category headings cannot exceed level six.");
+  const lines = [heading, ""];
+  if (categories.length) {
+    for (const category of categories) {
+      lines.push(category, "");
+      if (template.placeholder) lines.push(template.placeholder, "");
+    }
+  } else if (template.placeholder) lines.push(template.placeholder, "");
+  const prefix = lines.join(newline) + newline;
   return replace(source, [[current.start, current.start, prefix]]);
 }

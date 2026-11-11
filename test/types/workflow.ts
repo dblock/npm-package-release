@@ -68,6 +68,12 @@ new ReleaseWorkflow({ changelog: new Notes(), versions: new Versions(), provider
 new ReleaseWorkflow();
 new ReleaseWorkflow({ changelog: new KeepAChangelog("docs/CHANGES.md"), validator: new HookValidator() });
 new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
+new KeepAChangelog("CHANGELOG.md", { placeholder: "* Contribute.", sections: ["Added", "Fixed"] });
+new IntrideaChangelog("CHANGELOG.md", { placeholder: "* Contribute." });
+// @ts-expect-error Template sections are an array of names.
+new KeepAChangelog("CHANGELOG.md", { sections: "Added" });
+// @ts-expect-error Intridea always requires a contribution placeholder.
+new IntrideaChangelog("CHANGELOG.md", { placeholder: null });
 class CheckBuiltArchive implements LifecycleHook<"build", "after"> {
   readonly id = "check-built-archive";
   async run(hookContext: LifecycleContext<"build", "after">): Promise<void> {

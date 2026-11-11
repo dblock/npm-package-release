@@ -20,6 +20,15 @@ export async function checkDefaultChangelog(t, api) {
   await workflow.complete(fixture);
   assert.equal(fixture.published.length, 1);
   assert.match(await readFile(path, "utf8"), /## \[Unreleased\]\n\n## \[0\.1\.0\]/u);
+  const templatePath = join(fixture.cwd, "TEMPLATE.md");
+  await writeFile(templatePath, "## [Unreleased]\n\n### Added\n\n- Ship.\n* Contribute.\n\n### Fixed\n\n* Contribute.\n");
+  const changelog = new api.KeepAChangelog("TEMPLATE.md", {
+    placeholder: "* Contribute.", sections: ["Added", "Fixed"],
+  });
+  const notes = await changelog.release({ cwd: fixture.cwd, version: "0.1.0", date: "2026-11-11" });
+  assert.doesNotMatch(notes, /Contribute|### Fixed/u);
+  await changelog.next({ cwd: fixture.cwd, version: "0.1.1", releasedVersion: "0.1.0" });
+  assert.match(await readFile(templatePath, "utf8"), /### Fixed\n\n\* Contribute\./u);
 }
 
 export async function checkComposition(t, api) {
