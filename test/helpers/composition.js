@@ -16,8 +16,7 @@ export async function checkDefaultChangelog(t, api) {
   const built = await workflow.prepare(fixture);
   assert.ok(built.runtime.services.changelog instanceof api.KeepAChangelog);
   assert.match(await readFile(path, "utf8"), /## \[0\.1\.0\] - \d{4}-\d{2}-\d{2}/u);
-  await workflow.complete(fixture);
-  await workflow.complete(fixture);
+  await workflow.run({ ...fixture, env: built.runtime.env });
   assert.equal(fixture.published.length, 1);
   assert.match(await readFile(path, "utf8"), /## \[Unreleased\]\n\n## \[0\.1\.0\]/u);
   const templatePath = join(fixture.cwd, "TEMPLATE.md");
@@ -96,7 +95,6 @@ export async function checkComposition(t, api) {
   const npm = new api.NpmPackage(fixture.cwd, (program, args, options) =>
     fixture.run(program, args, { cwd: fixture.cwd, env: fixture.env, ...options }));
   class ProjectPublisher {
-    async available(name, version) { await npm.available(name, version); }
     async view(name, version) {
       fixture.events.push("project registry view");
       return npm.view(name, version);
@@ -135,7 +133,7 @@ export async function checkComposition(t, api) {
   assert.equal(snapshots[0].steps.publish, undefined);
   assert.equal(snapshots[1].steps.publish.outcome, "success");
   assert.equal(fixture.events.filter((event) => event === "project publication").length, 1);
-  assert.ok(fixture.events.indexOf("project registry view") > fixture.events.indexOf("next"));
+  assert.ok(fixture.events.lastIndexOf("project registry view") > fixture.events.indexOf("next"));
   assert.equal(JSON.parse(await readFile(join(fixture.cwd, "package.json"), "utf8")).version, "0.3.0");
   assert.equal(await readFile(notesPath, "utf8"), "Next 0.3.0\nCustom release 0.2.0\n");
   assert.ok(fixture.events.indexOf("project artifact check") < fixture.events.indexOf("npm publish"));

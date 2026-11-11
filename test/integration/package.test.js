@@ -102,8 +102,8 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   await checkSelfRelease(t, join(consumer, "node_modules/npm-package-release"));
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, complete, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection } from "npm-package-release";
-import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, CheckpointWorkflow, LifecycleHook, LifecycleContext } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection } from "npm-package-release";
+import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, LifecycleHook, LifecycleContext } from "npm-package-release";
 import { ReleaseTestProject, TestPublisher, TestReleaseHost } from "npm-package-release/testing";
 export async function testProjectContracts() {
   const project = await ReleaseTestProject.create();
@@ -134,13 +134,11 @@ const flow = Workflow.start<ReleaseOptions>({}, new LocalExecutionProvider({}))
 export async function run(options: ReleaseOptions) { return flow.run(options); }
 export async function staged(options: ReleaseOptions) {
   const workflow = new ReleaseWorkflow({ changelog: null });
-  workflow satisfies CheckpointWorkflow;
   const built = await prepare(workflow, options);
   built.state.artifact.integrity satisfies string;
-  return complete(workflow, options);
+  return release(workflow, { ...options, env: built.runtime.env });
 }
 export const semantic = new SemanticReleaseWorkflow({ nextDevelopment: false });
-semantic satisfies CheckpointWorkflow;
 new ReleaseWorkflow({ changelog: new KeepAChangelog("docs/HISTORY.md"), validator: new HookValidator() });
 new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
 new KeepAChangelog("CHANGELOG.md", { placeholder: "* Contribute.", sections: ["Added", "Fixed"] });

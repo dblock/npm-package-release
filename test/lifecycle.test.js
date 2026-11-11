@@ -10,7 +10,7 @@ class Hook {
   constructor(id, run) { this.id = id; this.run = run; }
 }
 
-test("ordered lifecycle classes preserve staging, exact consumers and checkpoint reconciliation", async (t) => {
+test("ordered lifecycle classes preserve staging, exact consumers and release ordering", async (t) => {
   await checkLifecycle(t, api);
 });
 
@@ -45,7 +45,7 @@ test("hook failures retain original errors, stop later hooks and report precise 
       if (timing === "before") assert.equal(fixture.published.length, 0);
       if (stage === "success") assert.equal((await fixture.state()).verification, "verified");
       fail = false;
-      const state = await workflow.complete(fixture);
+      const state = stage === "success" ? await api.verify(fixture) : await workflow.run(fixture);
       assert.equal(state.verification, "verified");
       assert.equal(fixture.published.length, 1);
     }

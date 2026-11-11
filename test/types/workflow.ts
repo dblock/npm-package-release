@@ -1,7 +1,7 @@
 import {
   Workflow, InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact,
   PublishArtifact, release, ReleaseWorkflow,
-  LocalExecutionProvider, prepare, complete,
+  LocalExecutionProvider, prepare,
   SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator,
   LifecycleHooks, MarkdownSection,
 } from "../../src/index.js";
@@ -9,7 +9,6 @@ import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
   ReleaseHost, ReleaseStore, ReleaseRepository, PackageProject, RegistryVerifier, ReleaseServices,
   ExecutionContext, ExecutionProvider,
-  ReleaseCheckpoint, CheckpointWorkflow,
   SemanticHistory, CommitAnalyzer, SemanticVersionPolicy, SemanticNotes, SemanticDecision,
   LifecycleHook, LifecycleContext,
 } from "../../src/index.js";
@@ -133,23 +132,15 @@ new ReleaseWorkflow({ validate: async () => {} });
 release(config);
 // @ts-expect-error Staged API accepts workflows, not configuration objects.
 prepare(config);
-export async function checkpointContracts() {
+export async function preparationContracts() {
   const workflow = new ReleaseWorkflow(config);
-  workflow satisfies CheckpointWorkflow<BuiltRelease, Awaited<ReturnType<typeof workflow.complete>>>;
   const built = await prepare(workflow);
   built.state.artifact.integrity satisfies string;
-  const completed = await complete(workflow);
+  const completed = await release(workflow, { env: built.runtime.env });
   completed.verification satisfies string | undefined;
-}
-export function immutableCheckpoint(checkpoint: ReleaseCheckpoint) {
-  // @ts-expect-error Checkpoint source identity is immutable.
-  checkpoint.source.releaseCommit = "changed";
-  // @ts-expect-error A checkpoint is data, not a workflow with publication capabilities.
-  complete(checkpoint);
 }
 export function semanticContracts(history: SemanticHistory, analyzer: CommitAnalyzer, selector: SemanticVersionPolicy, notes: SemanticNotes) {
   const workflow = new SemanticReleaseWorkflow({ history, analyzer, selector, notes });
-  workflow satisfies CheckpointWorkflow<BuiltRelease, Awaited<ReturnType<typeof workflow.complete>>>;
   Workflow.start<ReleaseOptions>().then(new AnalyzeSemanticRelease()).then(new InitializeSemanticRelease());
   // @ts-expect-error Semantic initialization requires an analyzed decision.
   Workflow.start<ReleaseOptions>().then(new InitializeSemanticRelease());

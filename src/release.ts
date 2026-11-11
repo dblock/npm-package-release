@@ -16,17 +16,11 @@ import {
   InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, PublishArtifact,
   PushRelease, CreateHostedRelease, PrepareNextVersion, VerifyRelease, ReleaseObserver,
   artifactDirectory, scopedCommand, verifyRetained,
-  CheckpointRelease, RestoreRelease,
 } from "./steps.js";
 import type { BuiltRelease, PreparedRelease } from "./steps.js";
 
-export interface CheckpointWorkflow<Prepared = unknown, Output = unknown> {
-  prepare(options: ReleaseOptions): Promise<Prepared>;
-  complete(options: ReleaseOptions): Promise<Output>;
-}
-
-export function checkpointRelease(workflow: Workflow<ReleaseOptions, PreparedRelease>): Workflow<ReleaseOptions, BuiltRelease> {
-  return workflow.then(new ValidateRelease()).then(new CommitRelease()).then(new BuildArtifact()).then(new CheckpointRelease());
+export function prepareRelease(workflow: Workflow<ReleaseOptions, PreparedRelease>): Workflow<ReleaseOptions, BuiltRelease> {
+  return workflow.then(new ValidateRelease()).then(new CommitRelease()).then(new BuildArtifact());
 }
 
 export function finishRelease(workflow: Workflow<ReleaseOptions, BuiltRelease>, nextDevelopment = true): Workflow<ReleaseOptions, ReleaseState> {
@@ -38,14 +32,12 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   readonly id = "npm-release";
   readonly workflow: Workflow<ReleaseOptions, ReleaseState>;
   readonly preparation: Workflow<ReleaseOptions, BuiltRelease>;
-  readonly completion: Workflow<ReleaseOptions, ReleaseState>;
 
   constructor(private readonly config: ReleaseConfig = {}) {
-    this.preparation = checkpointRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
+    this.preparation = prepareRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
       .then(new InitializeRelease(config))
       .then(new PrepareRelease()));
     this.workflow = finishRelease(this.preparation);
-    this.completion = finishRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider).then(new RestoreRelease(config)));
   }
 
   async run(options: ReleaseOptions = {}, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<ReleaseState> {
@@ -55,10 +47,6 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   async prepare(options: ReleaseOptions = {}): Promise<BuiltRelease> {
     return this.preparation.run(lifecycleOptions(this.config, options, false));
   }
-
-  async complete(options: ReleaseOptions = {}): Promise<ReleaseState> {
-    return this.completion.run(lifecycleOptions(this.config, options));
-  }
 }
 
 function workflowInstance(workflow: unknown): boolean {
@@ -66,20 +54,14 @@ function workflowInstance(workflow: unknown): boolean {
     Object.getPrototypeOf(workflow) !== Object.prototype && Object.getPrototypeOf(workflow) !== null;
 }
 
-function staged(workflow: CheckpointWorkflow): void {
-  if (!workflowInstance(workflow) || typeof workflow.prepare !== "function" || typeof workflow.complete !== "function") {
-    throw new Error("Export a workflow instance implementing prepare and complete for a checkpoint handoff.");
+export async function prepare<Prepared>(
+  workflow: Step<ReleaseOptions, unknown> & { prepare(options: ReleaseOptions): Promise<Prepared> },
+  options: ReleaseOptions = {},
+): Promise<Prepared> {
+  if (!workflowInstance(workflow) || typeof workflow.prepare !== "function" || typeof workflow.run !== "function") {
+    throw new Error("Export a workflow instance implementing prepare and run.");
   }
-}
-
-export async function prepare<Prepared>(workflow: CheckpointWorkflow<Prepared>, options: ReleaseOptions = {}): Promise<Prepared> {
-  staged(workflow);
   return workflow.prepare(options);
-}
-
-export async function complete<Output>(workflow: CheckpointWorkflow<unknown, Output>, options: ReleaseOptions = {}): Promise<Output> {
-  staged(workflow);
-  return workflow.complete(options);
 }
 
 export async function release<Output>(workflow: Step<ReleaseOptions, Output>, options: ReleaseOptions = {}): Promise<Output> {

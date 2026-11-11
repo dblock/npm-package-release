@@ -1,4 +1,4 @@
-import type { Command, ReleaseRepository, RepositoryCheckpoint } from "./contracts.js";
+import type { Command, ReleaseRepository } from "./contracts.js";
 
 export class Git implements ReleaseRepository {
   readonly run: (...args: string[]) => Promise<string>;
@@ -13,10 +13,11 @@ export class Git implements ReleaseRepository {
     if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/u.test(remote)) throw new Error("Invalid Git remote name.");
   }
 
-  async initialize() {
+  async initialize(sourceCommit?: string) {
     await this.checkout();
-    this.initialCommit = (await this.run("rev-parse", "HEAD")).trim();
-    await this.current(this.initialCommit);
+    this.initialCommit = sourceCommit || (await this.run("rev-parse", "HEAD")).trim();
+    if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(this.initialCommit) ||
+      !await this.ancestor(this.initialCommit, "HEAD")) throw new Error("Release source differs from the checkout.");
   }
 
   private async checkout() {
@@ -40,57 +41,19 @@ export class Git implements ReleaseRepository {
     return (await this.run("rev-parse", "FETCH_HEAD")).trim();
   }
 
-  async restore(source: RepositoryCheckpoint, bundle: string, version: string): Promise<void> {
-    await this.checkout();
-    if (source.branch !== this.branch || source.remote !== this.remote) throw new Error("Checkpoint repository differs.");
-    this.initialCommit = source.initialCommit;
-    await this.run("bundle", "verify", bundle);
-    await this.run("fetch", "--no-tags", bundle, "HEAD");
-    if ((await this.run("rev-parse", "FETCH_HEAD")).trim() !== source.releaseCommit ||
-      (await this.run("rev-parse", `${source.releaseCommit}^{tree}`)).trim() !== source.preparedTree) {
-      throw new Error("Checkpoint Git tree/commit mismatch.");
-    }
-    const parents = (await this.run("rev-list", "--parents", "-n", "1", source.releaseCommit)).trim().split(/\s+/u);
-    if (source.releaseCommit !== source.initialCommit &&
-      (parents.length !== 2 || parents[1] !== source.initialCommit)) throw new Error("Checkpoint release parent differs.");
-    const remote = await this.remoteHead();
-    if (remote !== source.initialCommit && !await this.ancestor(source.releaseCommit, remote)) {
-      throw new Error("Remote branch advanced; checkpoint cannot overwrite unrelated work.");
-    }
-    const head = (await this.run("rev-parse", "HEAD")).trim();
-    if (head !== source.initialCommit && !await this.ancestor(source.releaseCommit, head)) {
-      throw new Error("Checkout differs from checkpoint release.");
-    }
-    await this.tag(version, source.releaseCommit);
-    if (head === source.initialCommit) await this.run("merge", "--ff-only", source.releaseCommit);
-  }
-
   async clean() {
     if ((await this.run("status", "--porcelain=v1", "--untracked-files=all")).trim()) {
       throw new Error("Expected a clean checkout, including the index and untracked files.");
     }
   }
 
-  async current(expected: string) {
-    await this.run("fetch", "--no-tags", this.remote, `refs/heads/${this.branch}`);
-    if ((await this.run("rev-parse", "FETCH_HEAD")).trim() !== expected) {
-      throw new Error("Remote branch advanced; inspect the release state before retrying.");
-    }
-  }
-
-  async missingTag(version: string) {
-    try {
-      await this.run("show-ref", "--verify", "--quiet", `refs/tags/v${version}`);
-    } catch (error) {
-      if ((error as { code?: unknown }).code !== 1) throw error;
-      try {
-        await this.run("ls-remote", "--exit-code", this.remote, `refs/tags/v${version}`);
-      } catch (remoteError) {
-        if ((remoteError as { code?: unknown }).code === 2) return;
-        throw remoteError;
-      }
-    }
-    throw new Error(`Release tag already exists: v${version}`);
+  async current(expected: string, version?: string) {
+    const remote = await this.remoteHead();
+    if (remote === expected) return;
+    const release = version ? await this.existingRelease(version) : null;
+    if (release && (await this.ancestor(release, remote) ||
+      (release === (await this.run("rev-parse", "HEAD")).trim() && await this.ancestor(remote, release)))) return;
+    throw new Error("Remote branch advanced; inspect the release before retrying.");
   }
 
   async stage(edits: () => Promise<void>) {
@@ -110,6 +73,30 @@ export class Git implements ReleaseRepository {
 
   async commit(message: string, tree: string) {
     await this.unchanged(tree);
+    const version = /^Prepare release (\d+\.\d+\.\d+)$/u.exec(message)?.[1];
+    let existing = version ? await this.existingRelease(version) : null;
+    if (!version && message.startsWith("Prepare next development iteration, ")) {
+      const head = (await this.run("rev-parse", "HEAD")).trim();
+      const remote = await this.remoteHead();
+      const next = (await this.run("rev-list", "--first-parent", "--reverse", `${head}..${remote}`)).trim().split(/\s+/u)[0];
+      if (next && (await this.run("rev-list", "--parents", "-n", "1", next)).trim() === `${next} ${head}` &&
+        (await this.run("log", "-1", "--format=%s", next)).trim() === message) existing = next;
+    }
+    if (existing) {
+      const head = (await this.run("rev-parse", "HEAD")).trim();
+      if (version && head !== existing && !await this.ancestor(head, existing)) {
+        throw new Error("Checkout advanced beyond the matching release; refusing to rewind it.");
+      }
+      if ((await this.run("rev-parse", `${existing}^{tree}`)).trim() !== tree) {
+        throw new Error("Existing release or development tree differs from the intended changes.");
+      }
+      await this.run("update-ref", "HEAD", existing, head);
+      await this.clean();
+      return existing;
+    }
+    if (version && (await this.run("rev-parse", "HEAD")).trim() !== this.initialCommit) {
+      throw new Error("Checkout advanced beyond the captured release source.");
+    }
     if ((await this.run("diff", "--cached", "--name-only")).trim()) await this.run("commit", "-m", message);
     await this.clean();
     return (await this.run("rev-parse", "HEAD")).trim();
@@ -141,6 +128,17 @@ export class Git implements ReleaseRepository {
     const entries = (await this.run("ls-remote", "--tags", this.remote,
       `refs/tags/v${version}`, `refs/tags/v${version}^{}`)).trim().split(/\r?\n/u).filter(Boolean).map((line) => line.split(/\s+/u));
     return entries.find(([, ref]) => ref.endsWith("^{}"))?.[0] || entries[0]?.[0] || null;
+  }
+
+  private async existingRelease(version: string): Promise<string | null> {
+    const local = await this.tagCommit(version);
+    const remote = await this.remoteTag(version);
+    if (local && remote && local !== remote) throw new Error("Release tag points at another commit.");
+    if (!local && remote) {
+      await this.run("fetch", "--no-tags", this.remote, `refs/tags/v${version}`);
+      return (await this.run("rev-parse", "FETCH_HEAD^{commit}")).trim();
+    }
+    return local;
   }
 
   async tag(version: string, commit?: string) {

@@ -1,18 +1,18 @@
 import process from "node:process";
+import { readFile, writeFile } from "node:fs/promises";
 import { command } from "./command.js";
 import { Workflow } from "./workflow.js";
-import { checkpointRelease, finishRelease } from "./release.js";
+import { prepareRelease, finishRelease } from "./release.js";
 import { lifecycleOptions } from "./lifecycle.js";
 import { snapshot } from "./services.js";
-import { GitHistory, SemanticRelease, semanticPlan } from "./semantic.js";
+import { GitHistory, SemanticRelease, SemanticDecision, semanticPlan } from "./semantic.js";
 import {
   InitializeRelease, PrepareRelease,
-  RestoreRelease, ReleaseRuntime, ReleaseObserver, scopedCommand,
+  ReleaseRuntime, ReleaseObserver, scopedCommand,
 } from "./steps.js";
 import type { Step } from "./workflow.js";
-import type { CheckpointWorkflow } from "./release.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
-import type { SemanticDecision, SemanticServices } from "./semantic.js";
+import type { SemanticServices } from "./semantic.js";
 import type { Changelog, ReleaseConfig, ReleaseOptions, ReleaseState } from "./contracts.js";
 import type { BuiltRelease, InitializedRelease, PreparedRelease } from "./steps.js";
 
@@ -33,10 +33,14 @@ export class AnalyzeSemanticRelease implements Step<ReleaseOptions, AnalyzedRele
     }
     const { cwd = process.cwd(), run = command, env = process.env } = options;
     const execute = scopedCommand(cwd, run, this.config.timezone || "UTC", "analyze", env);
-    const head = (await execute("git", ["rev-parse", "HEAD"])).trim();
-    const analysis = await new SemanticRelease({
+    const head = env.NPR_SOURCE_COMMIT || (await execute("git", ["rev-parse", "HEAD"])).trim();
+    const saved = env.NPR_STATE_FILE ? JSON.parse(await readFile(env.NPR_STATE_FILE, "utf8")) : {};
+    if (!saved || typeof saved !== "object" || Array.isArray(saved) ||
+      Object.keys(saved).some((key) => key !== "analysis")) throw new Error("Invalid invocation analysis state.");
+    const analysis = saved.analysis ? new SemanticDecision(saved.analysis) : await new SemanticRelease({
       ...this.config, history: this.config.history || new GitHistory(execute, this.config.remote),
     }).analyze(head, options.version || null);
+    analysis.check(head, analysis.version, options.version?.trim() || null);
     if (!analysis.releasable) throw new Error("Nothing to release: no release-eligible commits.");
     return Object.freeze({ ...options, analysis });
   }
@@ -60,7 +64,8 @@ export class InitializeSemanticRelease implements Step<AnalyzedReleaseOptions, I
     if (!analysis.releasable) throw new Error("Nothing to release: no release-eligible commits.");
     const { cwd = process.cwd(), run = command, env = process.env } = options;
     const execute = scopedCommand(cwd, run, this.config.timezone || "UTC", "analyze", env);
-    analysis.check((await execute("git", ["rev-parse", "HEAD"])).trim(), analysis.version, options.version?.trim() || null);
+    analysis.check(env.NPR_SOURCE_COMMIT || (await execute("git", ["rev-parse", "HEAD"])).trim(),
+      analysis.version, options.version?.trim() || null);
     const config: ReleaseConfig = {
       ...this.config, changelog: this.config.changelog === undefined ? new GeneratedChangelog(analysis) : this.config.changelog,
     };
@@ -72,6 +77,7 @@ export class InitializeSemanticRelease implements Step<AnalyzedReleaseOptions, I
     const runtime = new ReleaseRuntime(config, input.runtime.cwd, input.runtime.run, input.runtime.log,
       input.runtime.env, input.runtime.services, state, input.runtime.provider, input.runtime.lifecycle);
     await runtime.services.store.save(state);
+    if (runtime.env.NPR_STATE_FILE) await writeFile(runtime.env.NPR_STATE_FILE, JSON.stringify({ analysis }), { mode: 0o600 });
     return Object.freeze({ ...input, state, runtime });
   }
 }
@@ -87,25 +93,22 @@ export class ValidateSemanticDecision implements Step<PreparedRelease, PreparedR
   }
 }
 
-export class SemanticReleaseWorkflow implements Step<ReleaseOptions, ReleaseState>, CheckpointWorkflow<BuiltRelease, ReleaseState> {
+export class SemanticReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   readonly id = "npm-semantic-release";
   readonly config: SemanticReleaseConfig;
   readonly preparation: Workflow<ReleaseOptions, BuiltRelease>;
-  readonly completion: Workflow<ReleaseOptions, ReleaseState>;
   readonly workflow: Workflow<ReleaseOptions, ReleaseState>;
 
   constructor(config: SemanticReleaseConfig = {}) {
     config = Object.freeze({ ...config });
     this.config = config;
     const nextDevelopment = config.nextDevelopment ?? false;
-    this.preparation = checkpointRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
+    this.preparation = prepareRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
       .then(new AnalyzeSemanticRelease(config))
       .then(new InitializeSemanticRelease(config))
       .then(new PrepareRelease())
       .then(new ValidateSemanticDecision()));
     this.workflow = finishRelease(this.preparation, nextDevelopment);
-    this.completion = finishRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
-      .then(new RestoreRelease({ ...config, changelog: null }, { nextDevelopment })), nextDevelopment);
   }
 
   async run(options: ReleaseOptions = {}, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<ReleaseState> {
@@ -113,8 +116,5 @@ export class SemanticReleaseWorkflow implements Step<ReleaseOptions, ReleaseStat
   }
   async prepare(options: ReleaseOptions = {}): Promise<BuiltRelease> {
     return this.preparation.run(lifecycleOptions(this.config, options, false));
-  }
-  async complete(options: ReleaseOptions = {}): Promise<ReleaseState> {
-    return this.completion.run(lifecycleOptions(this.config, options));
   }
 }

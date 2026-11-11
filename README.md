@@ -86,7 +86,7 @@ Review your changes, run tests, and dispatch from your default branch:
 gh workflow run release.yml
 ```
 
-This publishes the checked-in version and prepares the next patch version. After a manual first publication, select a new unpublished version; pass `-f version=0.1.1` to override the checked-in version. Verify the run summary, registry version/checksums, and GitHub Release. Inspect [recovery artifacts](docs/checkpoints.md) before retrying a failed run.
+This publishes the checked-in version and prepares the next patch version. After a manual first publication, select a new unpublished version; pass `-f version=0.1.1` to override the checked-in version. Verify the run summary, registry version/checksums, and GitHub Release. Inspect [recovery artifacts](docs/recovery.md) before retrying a failed run.
 
 ## Configuration
 
@@ -94,7 +94,7 @@ See [Detailed Usage](docs/usage.md) for CLI/API commands and defaults; [Changelo
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Changelog Templates](docs/changelogs.md), [Updating Markdown Sections](docs/markdown.md), [Testing Custom Workflows](docs/testing.md), the [Lifecycle Hook Example](examples/lifecycle-hooks/README.md), [Lifecycle Hooks](docs/hooks.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Checkpoints and Reconciliation](docs/checkpoints.md), and [Semantic Releases](docs/semantic.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Changelog Templates](docs/changelogs.md), [Updating Markdown Sections](docs/markdown.md), [Testing Custom Workflows](docs/testing.md), the [Lifecycle Hook Example](examples/lifecycle-hooks/README.md), [Lifecycle Hooks](docs/hooks.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Recovery and Reconciliation](docs/recovery.md), and [Semantic Releases](docs/semantic.md).
 
 ## License
 

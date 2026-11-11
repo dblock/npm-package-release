@@ -58,8 +58,6 @@ export async function checkSelfRelease(t, packageRoot, configuredWorkflow) {
   for (const file of ["package.json", "package-lock.json"]) {
     assert.equal(JSON.parse(await readFile(join(fixture.cwd, file), "utf8")).version, "3.2.2");
   }
-  await workflow.complete(fixture);
-  assert.equal(fixture.published.length, 1);
   await writeFile(join(fixture.cwd, "bin/npr.js"), 'import process from "node:process"; process.stdout.write("wrong-version\\n");\n');
   const changelog = join(fixture.cwd, "CHANGELOG.md");
   await writeFile(changelog, (await readFile(changelog, "utf8"))

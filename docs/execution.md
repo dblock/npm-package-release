@@ -59,8 +59,8 @@ Initialization failures reach `failed` with `execution.release === null`, even w
 
 A `succeeded` callback failure is reported as `workflow:success` and fails the invocation without republishing. It does not retroactively invalidate verified registry metadata. Notifications are not exactly-once deliveries; custom receivers need their own stable release key or confirmation. The runner does not retry them.
 
-## Current Limits and Next Work
+## Input Transport and Recovery
 
-New release starts still reject existing package versions, tags, and artifact directories. Explicit checkpoint completion now reconciles matching outputs, and Actions preserves the immutable checkpoint before publication. See [Checkpoints and Reconciliation](checkpoints.md) for the prepare/upload/complete contract and its limits.
+The GitHub provider optionally captures invocation inputs through `GITHUB_ENV`: source commit, original manifest version, calendar date, source timestamp, and a private runner-temporary analysis path. The current CLI process also receives those scoped values. Providers may implement `capture(inputs)` for their own process transport; immutable execution snapshots never expose these environments or file paths.
 
-Opt-in semantic selection remains the next gap relative to [ruby-gem-release 0.5.0](https://github.com/dblock/ruby-gem-release/releases/tag/v0.5.0). Completion reconciles archive checksums, Git trees/refs, and hosted outputs—not permission inferred from a completion journal. No successful-skip protocol, semantic workflow, new registry, or live authentication setup is introduced here.
+Each operation reconciles actual outputs from the current checkout and inputs, matching ruby-gem-release's rerun model. Actions preserves prepared artifacts before publication; neither artifacts nor diagnostic phases restore a workflow. See [Recovery and Reconciliation](recovery.md) for the prepare/upload/release sequence and its limits.

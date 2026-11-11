@@ -100,6 +100,17 @@ export function releaseChangelog(source: string, { format, version, date, ...opt
   if (!["intridea", "keep-a-changelog"].includes(format)) throw new Error("Unknown changelog format.");
   const intridea = format === "intridea";
   const template = changelogTemplate(format, options);
+  const released = new RegExp(intridea
+    ? `^${version.replaceAll(".", "\\.")} \\(\\d{4}/\\d{2}/\\d{2}\\)$`
+    : `^\\[${version.replaceAll(".", "\\.")}\\] - \\d{4}-\\d{2}-\\d{2}$`, "u");
+  if (headings(source).some(({ text }) => released.test(text))) {
+    const existing = section(source, released);
+    const notes = source.slice(existing.body, existing.end);
+    if (!document(cleanNotes(notes, existing.node.depth, template, false)).children.some(hasNotes)) {
+      throw new Error("Release notes must not be empty.");
+    }
+    return { source, notes: notes.trim() };
+  }
   const current = section(source, intridea ? /^\d+\.\d+\.\d+ \(Next\)$/u : /^\[Unreleased\]$/u);
   if (headings(source).some(({ text }) =>
     intridea ? text.startsWith(`${version} (`) && !text.endsWith("(Next)") : text.startsWith(`[${version}] - `),

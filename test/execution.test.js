@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import * as api from "../dist/index.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
@@ -99,6 +102,32 @@ test("workflow history is immutable, scoped per invocation, and propagated throu
   assert.deepEqual(seen[3].steps, {});
   assert.equal(seen[0].step.outcome, undefined);
   assert.equal(seen[2].step.id, "workflow:success");
+});
+
+test("GitHub transports only captured invocation inputs and preserves private analysis between processes", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "npr-execution-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const env = { GITHUB_ENV: join(directory, "environment"), RUNNER_TEMP: directory };
+  const inputs = {
+    NPR_SOURCE_COMMIT: "a".repeat(40), NPR_MANIFEST_VERSION: "0.1.0", NPR_RELEASE_DATE: "2026-11-11",
+    SOURCE_DATE_EPOCH: "1794355200",
+  };
+  const captured = await new api.GitHubExecutionProvider(env).capture(inputs);
+  assert.ok(captured.NPR_STATE_FILE.startsWith(directory));
+  assert.equal(await readFile(captured.NPR_STATE_FILE, "utf8"), "{}");
+  await writeFile(captured.NPR_STATE_FILE, '{"analysis":"private invocation data"}');
+  const next = new api.GitHubExecutionProvider({ ...env, ...captured });
+  assert.deepEqual(await next.capture(inputs), captured);
+  assert.equal(await readFile(captured.NPR_STATE_FILE, "utf8"), '{"analysis":"private invocation data"}');
+  const exported = await readFile(env.GITHUB_ENV, "utf8");
+  assert.ok(exported.includes(`NPR_SOURCE_COMMIT=${inputs.NPR_SOURCE_COMMIT}\n`));
+  assert.doesNotMatch(exported, /private invocation data/u);
+  assert.doesNotMatch(JSON.stringify(next.context(attributes)), /NPR_STATE_FILE|state\.json/u);
+  for (const invalid of [{ NPR_SOURCE_COMMIT: "value\nINJECTED=true" }, { GH_TOKEN: "private" }]) {
+    await assert.rejects(next.capture(invalid), /Invalid release invocation exports/u);
+    assert.equal(await readFile(env.GITHUB_ENV, "utf8"), exported);
+  }
+  assert.deepEqual(await new api.GitHubExecutionProvider({}).capture(inputs), inputs);
 });
 
 test("initialization failures notify observers once even without a captured release", async () => {

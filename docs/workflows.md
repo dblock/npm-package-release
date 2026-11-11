@@ -18,7 +18,7 @@ import { join } from "node:path";
 import {
   Workflow, ReleaseObserver, InitializeRelease, PrepareRelease, ValidateRelease,
   CommitRelease, BuildArtifact, PublishArtifact, PushRelease, CreateHostedRelease,
-  PrepareNextVersion, VerifyRelease, CheckpointRelease, RestoreRelease,
+  PrepareNextVersion, VerifyRelease,
 } from "npm-package-release";
 
 class CheckArchiveSize {
@@ -38,11 +38,9 @@ const preparation = Workflow.start(new ReleaseObserver())
   .then(new ValidateRelease())
   .then(new CommitRelease())
   .then(new BuildArtifact())
-  .then(new CheckArchiveSize())
-  .then(new CheckpointRelease());
+  .then(new CheckArchiveSize());
 
-const completion = Workflow.start(new ReleaseObserver())
-  .then(new RestoreRelease(config))
+const publication = preparation
   .then(new PublishArtifact())
   .then(new PushRelease())
   .then(new CreateHostedRelease())
@@ -52,11 +50,7 @@ const completion = Workflow.start(new ReleaseObserver())
 class ProjectRelease {
   id = "project-release";
   async prepare(options) { return preparation.run(options); }
-  async complete(options) { return completion.run(options); }
-  async run(options) {
-    await this.prepare(options);
-    return this.complete(options);
-  }
+  async run(options) { return publication.run(options); }
 }
 
 export default new ProjectRelease();
@@ -64,7 +58,7 @@ export default new ProjectRelease();
 
 In TypeScript, declare `class CheckArchiveSize implements Step<BuiltRelease, BuiltRelease>` and annotate its input/return types. The published declarations check the complete chain, including custom classes. An incompatible order is a compile-time error. JavaScript composition has the same runtime behavior but cannot provide compile-time guarantees without a JavaScript type checker.
 
-The outer class implements `Step<ReleaseOptions, ReleaseState>` and `CheckpointWorkflow<BuiltRelease, ReleaseState>`. Its explicit methods let Actions upload the checkpoint before publication. Custom classes own observer forwarding: reserve release-success notifications for completion, not preparation. `ReleaseWorkflow` supplies that behavior by default. Local run-only compositions remain supported with `npr release`.
+The outer class implements `Step<ReleaseOptions, ReleaseState>` with an additional `prepare` method so Actions can preserve artifacts before publication. Its run independently repeats preparation. Custom classes own observer forwarding and repeatable edits; reserve release-success notifications for the whole release, not preparation. `ReleaseWorkflow` supplies that behavior by default. Local run-only compositions remain supported with `npr release`.
 
 Export `new ReleaseWorkflow(options)` to use the standard sequence without listing every step. Supply service instances and an optional provider alongside runtime settings in that options object. `await release(workflow, options)` and `await workflow.run(options)` execute a composed workflow; the return type is the final step's output. Run options include `cwd`, `version`, `artifacts`, `run`, `log`, scoped `env`, `provider`, and `observer`. See [Execution Providers and Contexts](execution.md) for platform selection, run metadata, and lifecycle reporting.
 
@@ -80,12 +74,12 @@ Use [Lifecycle Hooks](hooks.md) to add ordered before/after behavior to either s
 | --- | --- | --- |
 | `repository` | `ReleaseRepository` | `Git`, including trusted staging, concurrency guards, atomic release pushes, and ref verification. |
 | `project` | `PackageProject` | `NpmPackage`, including manifest/lockfile updates, packing, strict consumers, and archive checks. |
-| `publisher` | `PackagePublisher` | `NpmPackage`, including registry lookup, duplicate checks, and exact-archive publication. |
+| `publisher` | `PackagePublisher` | `NpmPackage`, including registry lookup, checksum reconciliation, and exact-archive publication. |
 | `changelog` | `Changelog` | `KeepAChangelog`; choose `IntrideaChangelog` or a custom class, or `null` to skip built-in notes. |
 | `versions` | `VersionPolicy` | `NumericPatchVersions`, selecting the requested/current version and the next patch. |
 | `host` | `ReleaseHost` | `GitHubReleaseHost`, or `null` to skip hosting. |
 | `validator` | `ReleaseValidator` | `HookValidator`, adapting validation hooks or running npm tests/lint. |
-| `store` | `ReleaseStore` | `DirectoryReleaseStore`, exclusively reserving a recovery directory and atomically saving JSON. |
+| `store` | `ReleaseStore` | `DirectoryReleaseStore`, creating a recovery directory and atomically replacing diagnostic JSON. |
 | `verifier` | `RegistryVerifier` | `RegistryVisibility`, bounded fresh lookups against the selected publisher. |
 
 For example, replace next-version selection with a class instead of changing the runner:
@@ -108,14 +102,14 @@ For TypeScript, implement `VersionPolicy`; use `Changelog`, `ReleaseHost`, or an
 
 ## Ordering, Safety, and Recovery
 
-The default workflow preserves clean-checkout, trusted-index, release identity, build-once, strict-consumer, duplicate-version/tag, archive-integrity, atomic-push, and recovery guarantees. It creates hosting and next-development metadata before bounded registry visibility checks. A timeout is unverified, not permission to republish.
+The default workflow preserves clean-checkout, trusted-index, release identity, reproducible-build, strict-consumer, conflicting-output, archive-integrity, atomic-push, and recovery guarantees. It creates hosting and next-development metadata before bounded registry visibility checks. A timeout is unverified, not permission to republish.
 
 Custom workflows may add, replace, omit, or reorder compatible steps. For example, `VerifyRelease` accepts pushed, hosted, or next-development records, so hosting and next-development can be omitted. Publication cannot be composed immediately after preparation. Type contracts describe data dependencies; they do not prove that arbitrary trusted classes validated an archive, preserved identity, or published safely. A custom workflow explicitly owns any guarantees it bypasses. This is sequential composition, not a parallel job scheduler or an automatic recovery engine.
 
 `ReleaseObserver` logs step starts and records the failing step identifier and error against the last persisted release phase. Use it when composing built-in release steps. The generic runner stops on the first failure, never retries a step, and preserves the original error if failure reporting also fails. Custom observers implement `WorkflowObserver` with optional `started`, `completed`, `failed`, and whole-workflow `succeeded` callbacks. Events include frozen execution metadata; step events also include input and output/error as applicable. Per-run observers supplement the workflow observer rather than disabling failure persistence.
 
-Diagnostic state is read through the selected store. Built-in steps persist new snapshots; custom steps that change diagnostics must call `runtime.services.store.save` with a new state, or `runtime.report(state, phase)` to save and log it. Never interpret phase flags as a resume protocol or serialize service instances. Explicit completion reconciles outputs against an immutable checkpoint. Standalone `verify({ services })` accepts replacement service instances for retained custom releases; CLI verification uses the default npm/Git services. See [Checkpoints and Reconciliation](checkpoints.md).
+Diagnostic state is read through the selected store. Built-in steps persist new snapshots; custom steps that change diagnostics must call `runtime.services.store.save` with a new state, or `runtime.report(state, phase)` to save and log it. Never interpret phase flags as a resume protocol or serialize service instances. Each operation reconciles actual outputs from the current checkout and inputs. Standalone `verify({ services })` accepts replacement service instances for retained custom releases; CLI verification uses the default npm/Git services. See [Recovery and Reconciliation](recovery.md).
 
 ## Compatibility
 
-Configuration modules export workflow instances, not plain objects or service-selector descriptors. `release(workflow, options)` executes a class implementing `Step`; Actions additionally requires prepare/complete methods. Custom repositories implement `restore` and `nextIteration`. Missing/different hosted asset checksums fail rather than overwriting old assets. TypeScript configuration modules must be compiled to ESM before passing their path to `--config`; the CLI does not install a loader or compiler. Consumers can write JavaScript classes in `npr.config.js`.
+Configuration modules export workflow instances, not plain objects or service-selector descriptors. `release(workflow, options)` executes a class implementing `Step`; Actions additionally requires a `prepare` method. Custom repositories implement repeatable preparation and `nextIteration`, not bundle restoration. Missing/different hosted asset checksums fail rather than overwriting old assets. TypeScript configuration modules must be compiled to ESM before passing their path to `--config`; the CLI does not install a loader or compiler. Consumers can write JavaScript classes in `npr.config.js`.

@@ -101,7 +101,7 @@ test("semantic services are replaceable classes rather than fixed selection hook
   assert.equal(decision.notes, "Project notes: project change");
 });
 
-test("semantic workflow uses actual reachable tags and checkpointed decisions without a development bump", async (t) => {
+test("semantic workflow uses actual reachable tags and invocation-scoped decisions without a development bump", async (t) => {
   await checkSemanticRelease(t, api);
 });
 
@@ -116,8 +116,6 @@ test("explicit semantic releases can opt into a next-development commit", async 
   assert.equal(result.semantic.decision.explicitVersion, "2.3.4");
   assert.equal(result.semantic.decision.releaseType, null);
   assert.equal(JSON.parse(await readFile(join(fixture.cwd, "package.json"), "utf8")).version, "2.3.5");
-  await workflow.complete(fixture);
-  assert.equal(fixture.published.length, 1);
   assert.equal(fixture.events.filter((event) => event === "next").length, 1);
 });
 

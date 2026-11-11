@@ -67,33 +67,42 @@ test("dirty checkouts and unexpected validation/index changes cannot enter a rel
   assert.equal(fixture.published.length, 0);
 });
 
-test("local and remote duplicate tags are rejected without touching project files", async (t) => {
-  const fixture = await releaseFixture(t);
-  await fixture.git("tag", "v0.1.0");
-  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /tag already exists/u);
-  await fixture.git("push", "origin", "refs/tags/v0.1.0");
-  await fixture.git("tag", "-d", "v0.1.0");
-  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /tag already exists/u);
-  assert.equal(await fixture.git("status", "--porcelain"), "");
+test("local and remote tags with a conflicting intended tree fail before publication", async (t) => {
+  for (const remote of [false, true]) {
+    const fixture = await releaseFixture(t);
+    await fixture.git("tag", "v0.1.0");
+    const original = await fixture.commit();
+    if (remote) {
+      await fixture.git("push", "origin", "refs/tags/v0.1.0");
+      await fixture.git("tag", "-d", "v0.1.0");
+    }
+    await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /tree differs/u);
+    assert.equal(await fixture.commit(), original);
+    assert.equal(fixture.published.length, 0);
+  }
 });
 
-test("duplicate versions and non-404 registry errors fail closed", async (t) => {
+test("unverifiable published versions and non-404 registry errors fail closed", async (t) => {
   for (const settings of [
     { alreadyPublished: true },
     { registryError: Object.assign(new Error("Registry unavailable"), { stdout: '{"error":{"code":"E503"}}' }) },
     { registryError: Object.assign(new Error("Malformed response"), { stdout: "<html>" }) },
   ]) {
     const fixture = await releaseFixture(t, settings);
-    await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /already published|Registry unavailable|Malformed response/u);
+    await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /integrity is unavailable|Registry unavailable|Malformed response/u);
     assert.equal(fixture.published.length, 0);
     assert.equal(await fixture.git("status", "--porcelain"), "");
   }
 });
 
 test("a failed remote push after publication retains the archive/bundle and never starts next", async (t) => {
+  let blocked = true;
   const fixture = await releaseFixture(t, {
     intercept: async (program, args) => {
-      if (program === "git" && args[0] === "push") throw new Error("Simulated remote push failure");
+      if (blocked && program === "git" && args[0] === "push") {
+        blocked = false;
+        throw new Error("Simulated remote push failure");
+      }
     },
   });
   await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /push failure/u);
@@ -104,7 +113,9 @@ test("a failed remote push after publication retains the archive/bundle and neve
   assert.equal(fixture.events.includes("next"), false);
   assert.ok((await readFile(join(fixture.artifacts, "release.bundle"))).length > 0);
   assert.ok((await readFile(join(fixture.artifacts, state.artifact.filename))).length > 0);
-  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /Remote branch advanced/u);
+  const recovered = await release(new ReleaseWorkflow(fixture.config), fixture);
+  assert.equal(recovered.verification, "verified");
+  assert.equal(recovered.artifact.integrity, state.artifact.integrity);
   assert.equal(fixture.published.length, 1);
 });
 
@@ -182,7 +193,7 @@ test("retained and registry integrity mismatches fail rather than republish", as
   }
 });
 
-test("invalid configuration, versions, runtime scope, and existing artifacts fail safely", async (t) => {
+test("invalid inputs fail safely and repeated artifact directories preserve unrelated files", async (t) => {
   const fixture = await releaseFixture(t);
   for (const config of [
     { changelog: false }, { changelog: { format: "bad" } }, { ...fixture.config, prepare: "npm test" },
@@ -193,6 +204,12 @@ test("invalid configuration, versions, runtime scope, and existing artifacts fai
   ]) await assert.rejects(release(new ReleaseWorkflow(config), fixture));
   await assert.rejects(release(new ReleaseWorkflow(fixture.config), { ...fixture, version: "1.0.0-beta.1" }), /numeric/u);
   await assert.rejects(release(new ReleaseWorkflow(fixture.config), { ...fixture, version: "9007199254740992.0.0" }), /semantic/u);
+  for (const invalid of [
+    { NPR_SOURCE_COMMIT: "not-a-commit" }, { NPR_RELEASE_DATE: "yesterday" },
+    { NPR_MANIFEST_VERSION: "0.1.0-beta.1" }, { SOURCE_DATE_EPOCH: "not-a-timestamp" },
+  ]) await assert.rejects(release(new ReleaseWorkflow(fixture.config), {
+    ...fixture, env: { ...fixture.env, ...invalid },
+  }));
   await assert.rejects(release(new ReleaseWorkflow(fixture.config), { ...fixture, env: {
     ...fixture.env, GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "pull_request",
   } }), /manual dispatch/u);
@@ -201,7 +218,7 @@ test("invalid configuration, versions, runtime scope, and existing artifacts fai
   await assert.rejects(release(new ReleaseWorkflow(fixture.config), { ...fixture, cwd: subdirectory }), /repository root/u);
   await mkdir(fixture.artifacts);
   await writeFile(join(fixture.artifacts, "preserve.txt"), "Do not overwrite.");
-  await assert.rejects(release(new ReleaseWorkflow(fixture.config), fixture), /Existing release artifacts/u);
+  await release(new ReleaseWorkflow(fixture.config), fixture);
   assert.equal(await readFile(join(fixture.artifacts, "preserve.txt"), "utf8"), "Do not overwrite.");
 });
 

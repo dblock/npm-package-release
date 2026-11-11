@@ -54,6 +54,18 @@ test("Keep a Changelog updates compare references and preserves historical conte
   assert.equal(nextChangelog(next, { format: "keep-a-changelog", version: "0.1.1", releasedVersion: "0.1.0" }), next);
 });
 
+test("repeated releases reuse exact notes, references and line endings without redating headings", () => {
+  for (const [format, source] of [["intridea", intridea], ["keep-a-changelog", keep]]) {
+    for (const newline of ["\n", "\r\n"]) {
+      const released = releaseChangelog(source.replaceAll("\n", newline), { ...options, format });
+      assert.deepEqual(releaseChangelog(released.source, {
+        ...options, date: "2026-11-10", format,
+      }), released);
+      assert.throws(() => releaseChangelog(released.source + released.source, { ...options, format }), /Expected exactly one/u);
+    }
+  }
+});
+
 test("CRLF paragraphs and fenced/quoted fake headings are preserved", () => {
   const prefix = "```md\n## 0.1.0 (Next)\n```\n\n> ## 0.1.0 (Next)\n\n";
   const source = (prefix + intridea).replaceAll("\n", "\r\n");

@@ -51,7 +51,7 @@ test("custom classes replace services and add a real prepublication artifact ste
   await checkComposition(t, api);
 });
 
-test("the default changelog supports Keep a Changelog through checkpoint completion", async (t) => {
+test("the default changelog supports Keep a Changelog through repeated preparation", async (t) => {
   await checkDefaultChangelog(t, api);
 });
 
@@ -59,11 +59,10 @@ test("release entry points reject plain configuration and method-bag exports", a
   for (const value of [
     {}, null, { changelog: { format: "intridea" } },
     { id: "plain-object", async run() { assert.fail("Must not execute"); },
-      async prepare() { assert.fail("Must not prepare"); }, async complete() { assert.fail("Must not complete"); } },
+      async prepare() { assert.fail("Must not prepare"); } },
   ]) {
     await assert.rejects(api.release(value), /workflow instance/u);
     await assert.rejects(api.prepare(value), /workflow instance/u);
-    await assert.rejects(api.complete(value), /workflow instance/u);
   }
 });
 

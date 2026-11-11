@@ -22,7 +22,14 @@ test("version updates preserve CRLF/indentation and support projects without loc
   const path = join(fixture.cwd, "package.json");
   const manifest = JSON.parse(await readFile(path, "utf8"));
   await writeFile(path, JSON.stringify(manifest, null, "\t").replaceAll("\n", "\r\n") + "\r\n");
+  const lockPath = join(fixture.cwd, "package-lock.json");
+  const compact = JSON.stringify(JSON.parse(await readFile(lockPath, "utf8")));
+  await writeFile(lockPath, compact);
   const pkg = new NpmPackage(fixture.cwd, fixture.run);
+  const original = await readFile(path, "utf8");
+  await pkg.setVersion("0.1.0");
+  assert.equal(await readFile(path, "utf8"), original);
+  assert.equal(await readFile(lockPath, "utf8"), compact);
   await pkg.setVersion("0.2.0");
   assert.match(await readFile(path, "utf8"), /\r\n\t"version": "0.2.0"/u);
   await rm(join(fixture.cwd, "package-lock.json"));
@@ -51,7 +58,10 @@ test("the embedded packed manifest and npm-reported archive checksum must agree"
     cwd: fixture.cwd,
   }));
   const pkg = new NpmPackage(fixture.cwd, async (program, args, options) => {
-    if (program === "npm" && args[0] === "pack") return JSON.stringify({ ...metadata, integrity: "incorrect" });
+    if (program === "npm" && args[0] === "pack") {
+      const packed = record(await command(program, args, { cwd: fixture.cwd, ...options }));
+      return JSON.stringify({ ...packed, integrity: "incorrect" });
+    }
     return await command(program, args, { cwd: fixture.cwd, ...options });
   });
   await assert.rejects(pkg.inspect(join(fixture.directory, metadata.filename), {

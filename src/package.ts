@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import type { Buffer } from "node:buffer";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { numericVersion } from "./command.js";
@@ -50,8 +52,9 @@ export class NpmPackage implements PackageProject, PackagePublisher {
   async setVersion(version: string) {
     numericVersion(version);
     const manifest = await this.read();
-    const files: [string, { version: string }][] = [[join(this.cwd, "package.json"), { ...manifest }]];
     const lock = await this.lockfile(manifest);
+    if (manifest.version === version) return;
+    const files: [string, { version: string }][] = [[join(this.cwd, "package.json"), { ...manifest }]];
     if (lock) {
       if (lock.packages?.[""]) lock.packages[""].version = version;
       files.push([join(this.cwd, "package-lock.json"), lock]);
@@ -95,10 +98,6 @@ export class NpmPackage implements PackageProject, PackagePublisher {
     }
   }
 
-  async available(name: string, version: string) {
-    if (await this.view(name, version)) throw new Error(`Version is already published: ${name}@${version}`);
-  }
-
   async inspect(archive: string, identity: ReleaseIdentity): Promise<Artifact> {
     const manifest = JSON.parse(await this.run("tar", ["-xOf", archive, "package/package.json"]));
     if (manifest.name !== identity.name || manifest.version !== identity.version) {
@@ -113,16 +112,28 @@ export class NpmPackage implements PackageProject, PackagePublisher {
   }
 
   async pack(directory: string, identity: ReleaseIdentity) {
-    const metadata = record(await this.npm(["pack", "--json", "--pack-destination", directory]));
-    if (metadata.name !== identity.name || metadata.version !== identity.version ||
-      typeof metadata.filename !== "string" || basename(metadata.filename) !== metadata.filename) {
-      throw new Error("npm pack identity/version/filename mismatch.");
-    }
-    const artifact = await this.inspect(join(directory, metadata.filename), identity);
-    if (artifact.integrity !== metadata.integrity || artifact.shasum !== metadata.shasum) {
-      throw new Error("npm pack archive integrity mismatch.");
-    }
-    return artifact;
+    const temporary = await mkdtemp(join(directory, ".npr-pack-"));
+    try {
+      const metadata = record(await this.npm(["pack", "--json", "--pack-destination", temporary]));
+      if (metadata.name !== identity.name || metadata.version !== identity.version ||
+        typeof metadata.filename !== "string" || basename(metadata.filename) !== metadata.filename) {
+        throw new Error("npm pack identity/version/filename mismatch.");
+      }
+      const packed = join(temporary, metadata.filename);
+      const artifact = await this.inspect(packed, identity);
+      if (artifact.integrity !== metadata.integrity || artifact.shasum !== metadata.shasum) {
+        throw new Error("npm pack archive integrity mismatch.");
+      }
+      const target = join(directory, metadata.filename);
+      let existing: Buffer | undefined;
+      try { existing = await readFile(target); } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      if (existing) {
+        if (!existing.equals(await readFile(packed))) throw new Error("Existing archive differs from the reproducible build.");
+      } else await copyFile(packed, target, constants.COPYFILE_EXCL);
+      return artifact;
+    } finally { await rm(temporary, { recursive: true, force: true }); }
   }
 
   async consumer(archive: string, check: (consumer: string) => Promise<void>) {

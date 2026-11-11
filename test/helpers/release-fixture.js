@@ -105,6 +105,8 @@ export async function releaseFixture(t, settings = {}) {
   const env = {
     ...process.env, GITHUB_ACTIONS: "false",
     GITHUB_STEP_SUMMARY: join(directory, "summary.md"),
+    GITHUB_ENV: join(directory, "environment"), RUNNER_TEMP: directory,
+    NPR_SOURCE_COMMIT: undefined, NPR_MANIFEST_VERSION: undefined, NPR_RELEASE_DATE: undefined, NPR_STATE_FILE: undefined,
   };
   const publisher = new NpmPackage(cwd, (program, args, options) => run(program, args, { cwd, env, ...options }));
   const config = {

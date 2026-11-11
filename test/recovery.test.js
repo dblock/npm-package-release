@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { cp, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import test from "node:test";
 import * as api from "../dist/index.js";
 import { command } from "../dist/command.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
 
-test("a downloaded checkpoint completes in a fresh checkout and reconciles failed and repeated publication", async (t) => {
+test("current-checkout release operations reconcile failed and repeated publication without restoring diagnostics", async (t) => {
   let failPush = false;
   const fixture = await releaseFixture(t, {
     onPublish: async () => { throw new Error("Transport failed after npm accepted the archive"); },
@@ -24,80 +24,96 @@ test("a downloaded checkpoint completes in a fresh checkout and reconciles faile
   assert.equal(fixture.published.length, 0);
   assert.equal(notifications, 0);
   assert.equal((await fixture.git("ls-remote", "origin", "refs/heads/master")).split("\t")[0], built.state.initialCommit);
-  const artifacts = join(fixture.directory, "downloaded-checkpoint");
-  await cp(fixture.artifacts, artifacts, { recursive: true });
-  const immutable = await readFile(join(artifacts, "checkpoint.json"), "utf8");
-  await writeFile(join(artifacts, "release.json"), '{"phase":"next","verification":"verified","artifact":{"filename":"wrong"}}');
-  const cwd = join(fixture.directory, "replacement-runner");
-  await command("git", ["-c", "core.autocrlf=false", "clone", "--branch", "master", fixture.remote, cwd]);
-  await command("git", ["config", "user.name", "Checkpoint Test"], { cwd });
-  await command("git", ["config", "user.email", "checkpoint@example.test"], { cwd });
-  await command("git", ["config", "commit.gpgsign", "false"], { cwd });
-  await command("git", ["config", "core.autocrlf", "false"], { cwd });
-  const options = { ...fixture, cwd, artifacts };
+  await writeFile(join(fixture.artifacts, "release.json"), '{"phase":"next","verification":"verified","artifact":{"filename":"wrong"}}');
+  const options = { ...fixture, version: built.release.version, env: built.runtime.env };
   failPush = true;
-  await assert.rejects(api.complete(config, options), /Connection failed/u);
+  await assert.rejects(api.release(config, options), /Connection failed/u);
   assert.equal(fixture.published.length, 1);
   assert.equal(notifications, 0);
-  const completed = await api.complete(config, options);
+  const completed = await api.release(config, options);
   assert.equal(completed.verification, "verified");
   assert.equal(notifications, 1);
   const pushes = fixture.events.filter((event) => event === "git push").length;
-  const again = await api.complete(config, options);
-  assert.equal(again.nextCommit, completed.nextCommit);
+  const published = await new api.PublishArtifact().run(built);
+  const pushed = await new api.PushRelease().run(published);
+  const hosted = await new api.CreateHostedRelease().run(pushed);
+  const again = await new api.PrepareNextVersion().run(hosted);
+  assert.equal(again.state.nextCommit, completed.nextCommit);
   assert.equal(fixture.published.length, 1);
-  assert.equal(fixture.events.filter((event) => event === "npm pack").length, 1);
+  assert.equal(fixture.events.filter((event) => event === "npm pack").length, 3);
   assert.equal(fixture.events.filter((event) => event === "git push").length, pushes);
   assert.equal(fixture.events.filter((event) => event === "gh release").length, 1);
   assert.equal(fixture.events.filter((event) => event === "next").length, 1);
-  assert.equal(await readFile(join(artifacts, "checkpoint.json"), "utf8"), immutable);
-  assert.equal(await command("git", ["status", "--porcelain"], { cwd }), "");
-  await command("git", ["commit", "--allow-empty", "-m", "Later local development"], { cwd });
-  const later = await command("git", ["rev-parse", "HEAD"], { cwd });
-  await assert.rejects(api.complete(config, options), /refusing to rewind/u);
-  assert.equal(await command("git", ["rev-parse", "HEAD"], { cwd }), later);
+  await assert.rejects(readFile(join(fixture.artifacts, "checkpoint.json")), { code: "ENOENT" });
+  assert.equal(await fixture.git("status", "--porcelain"), "");
+  await fixture.git("commit", "--allow-empty", "-m", "Later local development");
+  const later = await fixture.commit();
+  await assert.rejects(api.release(config, options), /refusing to rewind/u);
+  assert.equal(await fixture.commit(), later);
   assert.equal(fixture.published.length, 1);
 });
 
-test("checkpoint validation rejects changed evidence and strips unrelated metadata before any publication", async (t) => {
+test("a conflicting intended release tree is rejected before publication", async (t) => {
   const fixture = await releaseFixture(t);
-  await api.prepare(new api.ReleaseWorkflow(fixture.config), fixture);
-  const path = join(fixture.artifacts, "checkpoint.json");
-  const original = JSON.parse(await readFile(path, "utf8"));
-  for (const patch of [
-    { schema: 99 }, { source: { ...original.source, releaseCommit: "invalid" } },
-    { artifact: { ...original.artifact, filename: "../escape.tgz" } },
-    { source: { ...original.source, releaseCommit: original.source.initialCommit } },
-    { source: { ...original.source, preparedTree: "0".repeat(40) } },
-    { source: { ...original.source, initialCommit: "0".repeat(40) } },
-    { timezone: null }, { verificationOptions: { attempts: 0, delay: 0 } },
-    { notesDigest: "changed" }, { bundleDigest: "changed" },
-    { release: { ...original.release, notes: "Different notes" } },
-  ]) {
-    await writeFile(path, JSON.stringify({ ...original, ...patch }));
-    await assert.rejects(api.complete(new api.ReleaseWorkflow(fixture.config), fixture));
-    assert.equal(fixture.published.length, 0);
-  }
-  await writeFile(path, JSON.stringify({
-    ...original, source: { ...original.source, name: "untrusted", environment: "private" },
-  }));
-  const checkpoint = await api.readCheckpoint(fixture.artifacts);
-  assert.equal(checkpoint.source.name, undefined);
-  assert.equal(checkpoint.source.environment, undefined);
-  assert.throws(() => { checkpoint.source.releaseCommit = "changed"; }, TypeError);
-  await assert.rejects(api.complete(new api.ReleaseWorkflow({ ...fixture.config, branch: "different" }), fixture), /Configuration differs/u);
-  await writeFile(join(fixture.artifacts, original.artifact.filename), "Changed archive");
-  await assert.rejects(api.complete(new api.ReleaseWorkflow(fixture.config), fixture));
+  const built = await api.prepare(new api.ReleaseWorkflow(fixture.config), fixture);
+  const tag = await fixture.git("rev-parse", "v0.1.0");
+  await assert.rejects(api.release(new api.ReleaseWorkflow({
+    ...fixture.config, prepare: async () => { await writeFile(join(fixture.cwd, "README.md"), "Different intended release\n"); },
+  }), { ...fixture, env: built.runtime.env }), /tree differs/u);
+  assert.equal(await fixture.git("rev-parse", "v0.1.0"), tag);
   assert.equal(fixture.published.length, 0);
+});
+
+test("a nonreproducible rebuild cannot replace the preserved prepublication archive", async (t) => {
+  const fixture = await releaseFixture(t, { manifest: {
+    files: ["index.js", "test.js", "generated.js"],
+    scripts: { test: "node --test test.js", lint: "node --check index.js", prepack: "node build.js" },
+  } });
+  await writeFile(join(fixture.cwd, ".gitignore"), "generated.js\n");
+  await writeFile(join(fixture.cwd, "build.js"),
+    'import { writeFileSync } from "node:fs"; writeFileSync("generated.js", process.env.NPR_TEST_BUILD_VALUE);\n');
+  await fixture.git("add", ".gitignore", "build.js");
+  await fixture.git("commit", "-m", "Ignore generated build output");
+  await fixture.git("push", "origin", "master");
+  const workflow = new api.ReleaseWorkflow(fixture.config);
+  const built = await workflow.prepare({ ...fixture, env: { ...fixture.env, NPR_TEST_BUILD_VALUE: "first" } });
+  const archive = join(fixture.artifacts, built.state.artifact.filename);
+  const bytes = await readFile(archive);
+  await assert.rejects(workflow.run({
+    ...fixture, env: { ...built.runtime.env, NPR_TEST_BUILD_VALUE: "different" },
+  }), /Existing archive differs/u);
+  assert.deepEqual(await readFile(archive), bytes);
+  assert.equal(fixture.published.length, 0);
+});
+
+test("a fresh release checkout rebuilds matching outputs and reuses remote development without downloaded state", async (t) => {
+  const fixture = await releaseFixture(t);
+  const workflow = new api.ReleaseWorkflow(fixture.config);
+  const built = await workflow.prepare(fixture);
+  const released = await workflow.run({ ...fixture, env: built.runtime.env });
+  const cwd = join(fixture.directory, "fresh-release-checkout");
+  await command("git", ["-c", "core.autocrlf=false", "clone", "--branch", "v0.1.0", fixture.remote, cwd]);
+  await command("git", ["switch", "-c", "master"], { cwd });
+  await command("git", ["remote", "set-head", "origin", "master"], { cwd });
+  const again = await workflow.run({
+    ...fixture, cwd, artifacts: join(fixture.directory, "new-artifacts"), env: built.runtime.env,
+  });
+  assert.equal(again.releaseCommit, released.releaseCommit);
+  assert.equal(again.nextCommit, released.nextCommit);
+  assert.equal(again.artifact.integrity, released.artifact.integrity);
+  assert.equal(again.verification, "verified");
+  assert.equal(fixture.published.length, 1);
+  assert.equal(fixture.events.filter((event) => event === "gh release").length, 1);
+  assert.equal(await command("git", ["status", "--porcelain"], { cwd }), "");
 });
 
 test("published versions are reused only when both archive checksums match", async (t) => {
   const fixture = await releaseFixture(t);
   const built = await api.prepare(new api.ReleaseWorkflow(fixture.config), fixture);
   fixture.published.push({ name: built.release.name, version: built.release.version, dist: { integrity: "different", shasum: "different" } });
-  await assert.rejects(api.complete(new api.ReleaseWorkflow(fixture.config), fixture), /integrity mismatch/u);
+  await assert.rejects(api.release(new api.ReleaseWorkflow(fixture.config), { ...fixture, env: built.runtime.env }), /integrity mismatch/u);
   fixture.published[0].dist = {};
-  await assert.rejects(api.complete(new api.ReleaseWorkflow(fixture.config), fixture), /unavailable/u);
+  await assert.rejects(api.release(new api.ReleaseWorkflow(fixture.config), fixture), /unavailable/u);
   assert.equal(fixture.events.filter((event) => event === "npm publish").length, 0);
   assert.equal((await fixture.git("ls-remote", "origin", "refs/heads/master")).split("\t")[0], built.state.initialCommit);
 });
