@@ -1,8 +1,8 @@
-<img src="assets/logo.png" alt="A package box with an upward release arrow" width="160">
+<img src="https://raw.githubusercontent.com/dblock/npm-package-release/master/assets/logo.png" alt="A package box with an upward release arrow" width="160">
 
 # npm Package Release
 
-[![Test](https://github.com/dblock/npm-package-release/actions/workflows/test.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/test.yml) [![Lint](https://github.com/dblock/npm-package-release/actions/workflows/lint.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/lint.yml) [![Package](https://github.com/dblock/npm-package-release/actions/workflows/package.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/package.yml) [![Coverage Status](https://coveralls.io/repos/github/dblock/npm-package-release/badge.svg?branch=master)](https://coveralls.io/github/dblock/npm-package-release?branch=master)
+[![npm](https://img.shields.io/npm/v/npm-package-release.svg)](https://www.npmjs.com/package/npm-package-release) [![Test](https://github.com/dblock/npm-package-release/actions/workflows/test.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/test.yml) [![Lint](https://github.com/dblock/npm-package-release/actions/workflows/lint.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/lint.yml) [![Package](https://github.com/dblock/npm-package-release/actions/workflows/package.yml/badge.svg)](https://github.com/dblock/npm-package-release/actions/workflows/package.yml) [![Coverage Status](https://coveralls.io/repos/github/dblock/npm-package-release/badge.svg?branch=master)](https://coveralls.io/github/dblock/npm-package-release?branch=master)
 
 **Release your npm package from GitHub Actions without maintaining custom release scripts or storing an npm publish token.**
 
@@ -66,7 +66,7 @@ Merge the caller and locked development dependency into your default branch. Upg
 
 In **your GitHub repository → Settings → Environments**, create `release`, restrict it to your default branch, and optionally require maintainer approval. Branch rules must allow release commits/tags to be pushed; see [setup and branch permissions](docs/usage.md#new-project-setup).
 
-**New npm package:** First [publish a tested archive manually](docs/usage.md#first-publication). Then open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
+**New npm package:** First [publish a tested archive manually](docs/usage.md#1-publish-once-manually). After verifying the first release, open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
 
 | Field | Value |
 | --- | --- |

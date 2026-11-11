@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.1.0 (Next)
+## 0.1.1 (Next)
+
+- [#24](https://github.com/dblock/npm-package-release/pull/24): Document manual first-release approval and subsequent Trusted Publishing setup with command-first consumer instructions, verified release metadata, the npm version badge, and an npm-compatible README logo URL - [@dblock](https://github.com/dblock).
+- Your contribution here.
+
+## 0.1.0 (2026/11/11)
 
 - [#2](https://github.com/dblock/npm-package-release/pull/2): Shorten the CLI name to `npr` and the planned configuration filename to `npr.config.js` - [@dblock](https://github.com/dblock).
 - [#3](https://github.com/dblock/npm-package-release/pull/3): Implement npm release orchestration, changelog/version preparation, exact-artifact validation and publication, reusable Actions interfaces, and recovery verification - [@dblock](https://github.com/dblock).
@@ -23,4 +28,4 @@
 - [#21](https://github.com/dblock/npm-package-release/pull/21): Update README and documentation package/Actions pins to the published version during self-release development preparation - [@dblock](https://github.com/dblock).
 - [#22](https://github.com/dblock/npm-package-release/pull/22): Verify GitHub release assets without API digests by downloading and hashing their raw bytes - [@dblock](https://github.com/dblock).
 - [#23](https://github.com/dblock/npm-package-release/pull/23): Maintain dated, source-preserving changelog files from captured semantic release notes - [@dblock](https://github.com/dblock).
-- Your contribution here.
+- [#24](https://github.com/dblock/npm-package-release/pull/24): Document a staged bootstrap for the first real release through Trusted Publishing, with explicit approval and registry verification gates - [@dblock](https://github.com/dblock).
