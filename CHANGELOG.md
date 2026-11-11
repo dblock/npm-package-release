@@ -18,4 +18,5 @@
 - [#15](https://github.com/dblock/npm-package-release/pull/15): Add source-preserving Markdown section updates with exact-heading validation for release-managed documentation - [@dblock](https://github.com/dblock).
 - [#16](https://github.com/dblock/npm-package-release/pull/16): Add an optional consumer testing kit with disposable Git projects, local publication adapters, safe explicit fixture copying, and an executable lifecycle example - [@dblock](https://github.com/dblock).
 - [#18](https://github.com/dblock/npm-package-release/pull/18): Overload Markdown section replacement with optional literal or regular-expression substitutions while preserving surrounding content - [@dblock](https://github.com/dblock).
+- [#19](https://github.com/dblock/npm-package-release/pull/19): Copy whole fixture projects by default, including hidden files, with optional glob strings or exact file lists and Git metadata/alias protection - [@dblock](https://github.com/dblock).
 - Your contribution here.

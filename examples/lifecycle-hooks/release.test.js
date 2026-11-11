@@ -9,9 +9,7 @@ import { createReleaseWorkflow } from "./workflow.js";
 async function fixture(t, newline) {
   const project = await ReleaseTestProject.create();
   t.after(() => project.dispose());
-  await project.copyFiles(fileURLToPath(new URL(".", import.meta.url)), [
-    "README.md", "CHANGELOG.md", "workflow.js", "npr.config.js", "index.js", "check.js",
-  ]);
+  await project.copyFiles(fileURLToPath(new URL(".", import.meta.url)));
   for (const path of ["README.md", "CHANGELOG.md"]) {
     await project.write(path, (await readFile(join(project.cwd, path), "utf8")).replace(/\r?\n/gu, newline));
   }

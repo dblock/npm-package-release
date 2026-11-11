@@ -6,6 +6,7 @@ import process from "node:process";
 import test from "node:test";
 import { NpmPackage } from "../dist/index.js";
 import { ReleaseTestProject, TestPublisher, TestReleaseHost } from "../dist/testing.js";
+import { checkRecursiveCopying, checkGitMetadataCopying, checkGlobCopying } from "./helpers/testing.js";
 import "../examples/lifecycle-hooks/release.test.js";
 
 test("failed Git initialization removes only its owned temporary project", async (t) => {
@@ -77,12 +78,14 @@ test("explicit fixture copying preserves nested paths and modes and preflights e
   await writeFile(join(root, "nested", "tool"), "Executable.\n");
   await chmod(join(root, "nested", "tool"), 0o751);
   await writeFile(join(root, "valid.txt"), "Copy me.\n");
+  await writeFile(join(root, "unlisted.txt"), "Do not copy.");
   for (const invalid of ["missing.txt", "nested", "../escape", "/absolute", "C:\\absolute", "."]) {
     await assert.rejects(project.copyFiles(root, ["valid.txt", invalid]));
     await assert.rejects(readFile(join(project.cwd, "valid.txt")), { code: "ENOENT" });
   }
-  await assert.rejects(project.copyFiles(root, "valid.txt"), /array/u);
+  await assert.rejects(project.copyFiles(root, 123), /glob string or an array/u);
   await project.copyFiles(root, ["nested/tool", "valid.txt"]);
+  await assert.rejects(stat(join(project.cwd, "unlisted.txt")), { code: "ENOENT" });
   assert.equal(await readFile(join(project.cwd, "nested", "tool"), "utf8"), "Executable.\n");
   if (process.platform !== "win32") assert.equal((await stat(join(project.cwd, "nested", "tool"))).mode & 0o777, 0o751);
   await project.copyFiles(root, ["valid.txt"]);
@@ -93,6 +96,18 @@ test("explicit fixture copying preserves nested paths and modes and preflights e
   assert.equal(await readFile(join(project.cwd, "valid.txt"), "utf8"), "Copy me.\n");
 });
 
+test("recursive fixture copying includes hidden files and preserves bytes, modes and local Git", async (t) => {
+  await checkRecursiveCopying(t, { ReleaseTestProject });
+});
+
+test("fixture copying rejects explicit Git metadata and aliases before copying any file", async (t) => {
+  await checkGitMetadataCopying(t, { ReleaseTestProject });
+});
+
+test("glob fixture copying matches relative hidden and nested files without expanding exact arrays", async (t) => {
+  await checkGlobCopying(t, { ReleaseTestProject });
+});
+
 test("fixture copying rejects escaping and dangling links in source and destination", {
   skip: process.platform === "win32",
 }, async (t) => {
@@ -101,9 +116,13 @@ test("fixture copying rejects escaping and dangling links in source and destinat
   t.after(async () => { await project.dispose(); await rm(root, { recursive: true, force: true }); });
   await mkdir(join(root, "source"));
   await mkdir(join(root, "outside"));
+  await symlink(".", join(root, "source", "cycle"));
+  await assert.rejects(project.copyFiles(join(root, "source")), /regular file/u);
+  await rm(join(root, "source", "cycle"));
   await writeFile(join(root, "outside", "file.txt"), "Outside.");
   await symlink(join(root, "outside"), join(root, "source", "escape"));
   await assert.rejects(project.copyFiles(join(root, "source"), ["escape/file.txt"]), /escapes/u);
+  await assert.rejects(project.copyFiles(join(root, "source")), /escapes/u);
   await symlink(join(root, "outside", "missing"), join(root, "source", "dangling"));
   await assert.rejects(project.copyFiles(join(root, "source"), ["dangling"]));
   await writeFile(join(root, "source", "file.txt"), "Inside.");

@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { chmod, copyFile, link, lstat, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, copyFile, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from "node:path";
 import process from "node:process";
+import { Minimatch } from "minimatch";
 import { command, numericVersion } from "./command.js";
 import { LocalExecutionProvider } from "./execution.js";
 import type {
@@ -120,8 +121,26 @@ function inside(root: string, candidate: string): boolean {
   return path === "" || (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`));
 }
 
-async function fixturePath(root: string, path: string): Promise<string> {
+function gitMetadata(path: string): boolean {
+  return path.split(/[\\/]/u).some((part) => part.toLowerCase() === ".git");
+}
+
+async function sourceFiles(root: string): Promise<string[]> {
+  const paths: string[] = [];
+  async function visit(directory: string): Promise<void> {
+    for (const entry of await readdir(join(root, directory), { withFileTypes: true })) {
+      if (gitMetadata(entry.name)) continue;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await visit(path); else paths.push(path);
+    }
+  }
+  await visit("");
+  return paths;
+}
+
+async function fixturePath(root: string, path: string, protectGit = false): Promise<string> {
   relativeFile(path);
+  if (protectGit && gitMetadata(path)) throw new Error("Fixture files must not copy or replace Git metadata.");
   const resolvedRoot = await realpath(root);
   const destination = resolve(resolvedRoot, path);
   if (destination === resolvedRoot || !inside(resolvedRoot, destination)) throw new Error("Fixture path must name a file.");
@@ -132,7 +151,11 @@ async function fixturePath(root: string, path: string): Promise<string> {
       ancestor = dirname(ancestor);
       continue;
     }
-    if (!inside(resolvedRoot, await realpath(ancestor))) throw new Error("Fixture symbolic link escapes its root.");
+    const resolvedAncestor = await realpath(ancestor);
+    if (!inside(resolvedRoot, resolvedAncestor)) throw new Error("Fixture symbolic link escapes its root.");
+    if (protectGit && gitMetadata(relative(resolvedRoot, resolvedAncestor))) {
+      throw new Error("Fixture files must not copy or replace Git metadata.");
+    }
     return destination;
   }
 }
@@ -200,14 +223,22 @@ export class ReleaseTestProject {
     await writeFile(destination, content);
   }
 
-  async copyFiles(root: string, paths: readonly string[]): Promise<void> {
-    if (!Array.isArray(paths)) throw new Error("Fixture paths must be an explicit array of files.");
+  async copyFiles(root: string, selection?: string | readonly string[]): Promise<void> {
+    if (selection !== undefined && typeof selection !== "string" && !Array.isArray(selection)) {
+      throw new Error("Fixture selection must be a glob string or an array of files.");
+    }
+    if (typeof selection === "string") relativeFile(selection);
+    const matcher = typeof selection === "string"
+      ? new Minimatch(selection.replace(/^(?:\.\/)+/u, ""), { dot: true, nonegate: true, nocomment: true, platform: "linux" })
+      : undefined;
+    const paths = typeof selection === "string" || selection === undefined ? await sourceFiles(root) : selection;
     const files: { source: string; destination: string; mode: number }[] = [];
     for (const path of paths) {
-      const source = await fixturePath(root, path);
+      if (matcher && !matcher.match(path.split(sep).join("/"))) continue;
+      const source = await fixturePath(root, path, true);
       const sourceStat = await stat(source);
       if (!sourceStat.isFile()) throw new Error("Fixture source must be a regular file.");
-      const destination = await fixturePath(this.cwd, path);
+      const destination = await fixturePath(this.cwd, path, true);
       try {
         if (!(await stat(destination)).isFile()) throw new Error("Fixture destination must be a regular file.");
       } catch (error) {

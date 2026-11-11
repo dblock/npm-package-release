@@ -68,7 +68,7 @@ Release tests run the real implementation with isolated Git remotes, npm test/li
 
 Keep this document focused on the current design and relevant rationale, removing superseded proposals rather than maintaining an implementation diary.
 
-The optional `npm-package-release/testing` export supplies disposable local Git projects and explicit publisher/host adapters without depending on `node:test`. It scrubs inherited command environments and validates explicit file copies against canonical roots. Test archives are immutable local outputs with real checksums; adapters do not model live authentication or sandbox arbitrary callbacks. The packaged lifecycle example shares the production builder with source/installed consumer tests; see [Testing Custom Workflows](docs/testing.md).
+The optional `npm-package-release/testing` export supplies disposable local Git projects and explicit publisher/host adapters without depending on `node:test`. It scrubs inherited command environments and validates all selected files against canonical roots before copying. Copying defaults to recursive hidden-file inclusion without `.git` metadata, supports glob strings or exact file arrays, and rejects metadata aliases without following directory links. Glob matching uses portable relative paths and includes hidden files; arrays retain literal semantics. Test archives are immutable local outputs with real checksums; adapters do not model live authentication or sandbox arbitrary callbacks. The packaged lifecycle example shares the production builder with source/installed consumer tests; see [Testing Custom Workflows](docs/testing.md).
 
 ## Artwork
 
