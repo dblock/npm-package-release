@@ -5,17 +5,27 @@ import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
 import { command } from "../../dist/command.js";
 import { releaseFixture } from "./release-fixture.js";
+import { selfReleaseFixture } from "./self-release.js";
 import { parse } from "yaml";
 
-export async function checkActions(t, archive) {
-  for (const file of [".github/workflows/release.yml", "action.yml"]) {
-    const semantic = file !== "action.yml";
+export async function checkActions(t, archive, files = [".github/workflows/release.yml", "action.yml"]) {
+  for (const file of files) {
+    const selfRelease = file === ".github/workflows/self-release.yml";
+    const semantic = file === ".github/workflows/release.yml";
     const releasedVersion = semantic ? "1.0.0" : "0.2.0";
     const source = await readFile(fileURLToPath(new URL(`../../${file}`, import.meta.url)), "utf8");
     const definition = parse(source);
-    const steps = file === "action.yml" ? definition.runs.steps : definition.jobs.release.steps;
-    const preparation = steps.findIndex((step) => step.run?.startsWith("npm exec --offline -- npr prepare "));
-    const completion = steps.findIndex((step) => step.run?.startsWith("npm exec --offline -- npr complete "));
+    let releaseDefinition = definition;
+    if (selfRelease) {
+      assert.equal(definition.jobs.release.uses, "./.github/workflows/release.yml");
+      releaseDefinition = parse(await readFile(
+        fileURLToPath(new URL(`../../${definition.jobs.release.uses}`, import.meta.url)), "utf8",
+      ));
+    }
+    const steps = file === "action.yml" ? definition.runs.steps : releaseDefinition.jobs.release.steps;
+    const executable = "npm exec --offline -- npr";
+    const preparation = steps.findIndex((step) => step.run?.startsWith(`${executable} prepare `));
+    const completion = steps.findIndex((step) => step.run?.startsWith(`${executable} complete `));
     assert.ok(preparation >= 0 && completion === preparation + 2, `Missing checkpoint handoff in ${file}`);
     const upload = steps[preparation + 1];
     assert.match(upload.uses, /^actions\/upload-artifact@/u);
@@ -23,21 +33,25 @@ export async function checkActions(t, archive) {
     assert.equal(upload.with["include-hidden-files"], true);
     assert.equal(upload.if, undefined);
     assert.equal(steps[completion].if, undefined);
-    const fixture = await releaseFixture(t);
+    const fixture = selfRelease ?
+      await selfReleaseFixture(t, fileURLToPath(new URL("../../", import.meta.url)), true) :
+      await releaseFixture(t);
     const bin = join(fixture.directory, "bin");
     await mkdir(bin);
     await writeFile(join(bin, "package.json"), '{"type":"module"}\n');
-    await writeFile(join(fixture.cwd, ".gitignore"), "node_modules/\n");
-    await command("npm", ["install", "--save-dev", "--ignore-scripts", "--no-audit", "--no-fund", archive], {
-      cwd: fixture.cwd,
-    });
-    await writeFile(join(fixture.cwd, "npr.config.js"),
-      semantic ?
-        'import { SemanticReleaseWorkflow } from "npm-package-release"; export default new SemanticReleaseWorkflow();\n' :
-        'import { ReleaseWorkflow, IntrideaChangelog } from "npm-package-release"; export default new ReleaseWorkflow({ changelog: new IntrideaChangelog() });\n');
-    await fixture.git("add", ".");
-    await fixture.git("commit", "-m", "feat: install release tooling");
-    await fixture.git("push", "origin", "master");
+    if (!selfRelease) {
+      await writeFile(join(fixture.cwd, ".gitignore"), "node_modules/\n");
+      await command("npm", ["install", "--save-dev", "--ignore-scripts", "--no-audit", "--no-fund", archive], {
+        cwd: fixture.cwd,
+      });
+      await writeFile(join(fixture.cwd, "npr.config.js"),
+        semantic ?
+          'import { SemanticReleaseWorkflow } from "npm-package-release"; export default new SemanticReleaseWorkflow();\n' :
+          'import { ReleaseWorkflow, IntrideaChangelog } from "npm-package-release"; export default new ReleaseWorkflow({ changelog: new IntrideaChangelog() });\n');
+      await fixture.git("add", ".");
+      await fixture.git("commit", "-m", "feat: install release tooling");
+      await fixture.git("push", "origin", "master");
+    }
     const publication = join(fixture.directory, "publication.json");
     const hosted = join(fixture.directory, "hosted.json");
     const npm = join(bin, "npm-shim.mjs");
@@ -99,6 +113,18 @@ if (args[0] === "api") {
       GITHUB_ACTIONS: "true", GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REF: "refs/heads/master",
       GITHUB_STEP_SUMMARY: join(fixture.directory, "summary.md"), GH_TOKEN: "isolated-test-only",
     };
+    if (selfRelease) {
+      await assert.rejects(readFile(join(fixture.cwd, "dist/index.js")), { code: "ENOENT" });
+      const build = steps.find((step) => step.name === "Build Release Tooling");
+      assert.equal(build.if, "${{ inputs.build }}");
+      const setup = [steps.find((step) => step.name === "Install Project Dependencies")];
+      if (definition.jobs.release.with.build) setup.push(build);
+      for (const step of setup) {
+        await command("bash", ["-euo", "pipefail", "-c", step.run], {
+          cwd: fixture.cwd, env,
+        });
+      }
+    }
     await command("bash", ["-euo", "pipefail", "-c", steps[preparation].run], { cwd: fixture.cwd, env });
     await assert.rejects(readFile(publication), { code: "ENOENT" });
     const durable = join(fixture.directory, "uploaded-checkpoint");
@@ -109,12 +135,13 @@ if (args[0] === "api") {
       assert.equal(JSON.parse(checkpoint).semantic.nextDevelopment, false);
     }
     const output = await command("bash", ["-euo", "pipefail", "-c", steps[completion].run], { cwd: fixture.cwd, env });
-    assert.ok(output.includes(`[npr] verified: @npr-test/example@${releasedVersion}`));
+    const packageName = selfRelease ? "npm-package-release" : "@npr-test/example";
+    assert.ok(output.includes(`[npr] verified: ${packageName}@${releasedVersion}`));
     assert.equal(JSON.parse(await readFile(hosted, "utf8")).tag_name, `v${releasedVersion}`);
     assert.equal(JSON.parse(await readFile(join(fixture.cwd, "package.json"), "utf8")).version, semantic ? releasedVersion : "0.2.1");
     const before = await readFile(publication, "utf8");
     await command("bash", ["-euo", "pipefail", "-c",
-      'npm exec --offline -- npr verify --artifacts "$NPR_ARTIFACTS"',
+      `${executable} verify --artifacts "$NPR_ARTIFACTS"`,
     ], { cwd: fixture.cwd, env });
     assert.equal(await readFile(publication, "utf8"), before);
     assert.equal(JSON.parse(await readFile(join(artifacts, "release.json"), "utf8")).verification, "verified");

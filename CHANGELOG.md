@@ -13,4 +13,5 @@
 - [#10](https://github.com/dblock/npm-package-release/pull/10): Default to KeepAChangelog with class-based service options and workflow-instance exports, remove unreleased configuration adapters, and document minimal Trusted Publishing setup targeting 0.1.0 - [@dblock](https://github.com/dblock).
 - [#11](https://github.com/dblock/npm-package-release/pull/11): Add typed, ordered lifecycle hook classes for numeric and semantic workflows with trusted preparation edits, success/failure notifications, and precise failure diagnostics - [@dblock](https://github.com/dblock).
 - [#12](https://github.com/dblock/npm-package-release/pull/12): Add an original npm-inspired box-and-arrow logo with editable artwork and packaged README assets - [@dblock](https://github.com/dblock).
+- [#13](https://github.com/dblock/npm-package-release/pull/13): Reuse the release workflow for this library's own checkout SDK with optional tooling builds, durable prepublication checkpoints, and documented setup/recovery - [@dblock](https://github.com/dblock).
 - Your contribution here.
