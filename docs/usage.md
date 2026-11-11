@@ -12,7 +12,13 @@ Follow the [four-step README setup](../README.md#usage) in **your package's repo
 
 ### First Publication
 
-An unpublished npm package needs a manual first publication before configuring its Trusted Publisher. Existing packages skip this step.
+An unpublished npm package must exist on the registry before configuring its Trusted Publisher, but its first real release need not be manual. Existing packages skip bootstrap.
+
+With explicit staging approval, [npm staged publishing](https://docs.npmjs.com/staged-publishing/) can bootstrap a new package using a tested archive: npm publishes a public `0.0.0-stage` placeholder while the candidate version remains private. Staging and `npm trust` require npm 11.15.0 or later; the reusable workflow defaults to npm 12. This is not a name-only reservation or a real release of your library.
+
+Inspect the returned stage ID, configure the GitHub environment/branch permissions and exact Trusted Publisher below, then obtain approval to reject the pending bootstrap candidate using `npm stage reject STAGE_ID_FROM_OUTPUT`. Never approve that candidate if the first real release should come from CI. Staged and published versions share a namespace: a pending candidate blocks direct publication of the same version. Verify the candidate was removed, the placeholder and publisher still exist, and the selected version is not public before dispatch. If any check fails, stop and inspect rather than repeating mutations. This tool's publisher runs direct `npm publish`, not staged publication or approval; see this library's [step-by-step bootstrap](../RELEASING.md#first-release-through-trusted-publishing) for the concrete example.
+
+Alternatively, make the first real release manually. The following instructions apply only to that alternative, not to the staged bootstrap.
 
 Review the initial release metadata through your normal PR process: synchronize manifest/lockfile versions (for example `0.1.0`), date the changelog heading, and remove its placeholder. From the clean merged commit, run tests/lint, build with `npm pack --json`, inspect the archive/checksums, and test that exact archive in an isolated consumer with strict engines and lifecycle scripts disabled.
 
@@ -140,7 +146,7 @@ Set `build: true` to run `npm run build` after dependency installation and befor
 
 For step-based integration, adapt the [composite caller example](../examples/action-release.yml), using `dblock/npm-package-release@v0.1.0` after checking out the attached default branch with full history, setting up compatible Node/npm, installing dependencies, and configuring Git identity. Its inputs are `config`, optional `version`, and `timezone`. The caller must supply manual-dispatch/default-branch guards, the `release` environment, contents/OIDC permissions, and non-canceling release concurrency; the composite action uses the same upload gate and failure-aware diagnostic upload. It does not configure repository protections or npm credentials. Both Actions interfaces require a workflow instance implementing prepare/run.
 
-Follow [New Project Setup](#new-project-setup) for the manual first-publication bootstrap, GitHub environment and branch rules, exact npm Trusted Publisher fields, and dispatch/verification. Existing packages skip only the bootstrap publication. [RELEASING](../RELEASING.md) instead describes maintaining this tool's own package, not setting up your consumer project.
+Follow [New Project Setup](#new-project-setup) for staged or manual bootstrap, GitHub environment and branch rules, exact npm Trusted Publisher fields, and dispatch/verification. Existing packages skip only bootstrap. [RELEASING](../RELEASING.md) instead describes maintaining this tool's own package, not setting up your consumer project.
 
 Release commits and tags require direct-push permission on the default branch. Configure that only with explicit authorization, retaining force-push/deletion protections and recognizing that removing a PR requirement permits direct pushes by all writers, not only this workflow. The tool does not change repository protections itself.
 

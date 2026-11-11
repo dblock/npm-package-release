@@ -66,7 +66,7 @@ Merge the caller and locked development dependency into your default branch. Upg
 
 In **your GitHub repository → Settings → Environments**, create `release`, restrict it to your default branch, and optionally require maintainer approval. Branch rules must allow release commits/tags to be pushed; see [setup and branch permissions](docs/usage.md#new-project-setup).
 
-**New npm package:** First [publish a tested archive manually](docs/usage.md#first-publication). Then open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
+**New npm package:** First [bootstrap the package](docs/usage.md#first-publication) through npm staged publishing or publish a tested archive manually. Staging creates a public placeholder, not a name-only reservation; clear the pending candidate before direct publication. Then open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
 
 | Field | Value |
 | --- | --- |

@@ -23,4 +23,5 @@
 - [#21](https://github.com/dblock/npm-package-release/pull/21): Update README and documentation package/Actions pins to the published version during self-release development preparation - [@dblock](https://github.com/dblock).
 - [#22](https://github.com/dblock/npm-package-release/pull/22): Verify GitHub release assets without API digests by downloading and hashing their raw bytes - [@dblock](https://github.com/dblock).
 - [#23](https://github.com/dblock/npm-package-release/pull/23): Maintain dated, source-preserving changelog files from captured semantic release notes - [@dblock](https://github.com/dblock).
+- [#24](https://github.com/dblock/npm-package-release/pull/24): Document a staged bootstrap for the first real release through Trusted Publishing, with explicit approval and registry verification gates - [@dblock](https://github.com/dblock).
 - Your contribution here.

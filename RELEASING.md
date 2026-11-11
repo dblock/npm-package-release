@@ -1,6 +1,6 @@
 # Releasing
 
-This guide covers maintaining `npm-package-release`. To configure your own package, follow [README](README.md#usage) and [Detailed Usage](docs/usage.md#new-project-setup). Consumer examples target `0.1.0`; this documentation does not authorize publication, credentials, tags, publisher setup, or protection changes.
+This guide covers maintaining `npm-package-release`. To configure your own package, follow [README](README.md#usage) and [Detailed Usage](docs/usage.md#new-project-setup). Consumer examples target `0.1.0`; this documentation does not authorize staging, rejecting staged packages, publication, credentials, tags, publisher setup, or protection changes.
 
 ## Version and Validation
 
@@ -16,7 +16,78 @@ Build before invoking the checkout's CLI with `node bin/npr.js`. The configurati
 
 Do not invoke `release` or `prepare` as a read-only preview: they edit files and create local commits/tags, and `release` also publishes and pushes. The reusable `release.yml` accepts `workflow_call` for consumers and this library itself. This repository's manually dispatched `self-release.yml` calls it locally with `build: true`; there is no repository-variable gate. Do not dispatch until the setup below is verified and publication is explicitly authorized.
 
-## Manual Publication
+## First Release Through Trusted Publishing
+
+The first real `0.1.0` release can come from GitHub Actions instead of a maintainer machine. [npm staged publishing](https://docs.npmjs.com/staged-publishing/) can create a new package: npm publishes a public `0.0.0-stage` placeholder while keeping the staged candidate private. That package can then receive a Trusted Publisher configuration. This is not a name-only reservation, and the placeholder is not proof that this library has been released.
+
+The built-in publisher runs direct `npm publish`; it does not stage, approve, or reject packages. A staged version occupies the same version namespace as a published one. For this bootstrap, never approve the staged `0.1.0`: reject it and verify the resulting registry/publisher state before dispatching the real release. If a candidate was already approved, stop and follow recovery rather than overwriting that version.
+
+### 1. Check Tools and Authenticate
+
+Activate Node.js 26 and npm 12 using your version manager. Staging and `npm trust` require npm 11.15.0 or later; the repository uses npm 12 for development and release validation. Enable account-level npm 2FA and authenticate in your own terminal:
+
+```sh
+node --version
+npm --version
+npm login --registry=https://registry.npmjs.org
+npm whoami --registry=https://registry.npmjs.org
+```
+
+Complete browser authentication and 2FA yourself; never put tokens, passwords, recovery codes, or authentication links in the PR or chat. `npm whoami` confirms the local session only, not future Actions OIDC permissions. Stop here until the expected tooling and account access are confirmed.
+
+### 2. Validate a Bootstrap Candidate
+
+Use reviewed source from a clean checkout, keep the unpublished version at `0.1.0`, and follow [Version and Validation](#version-and-validation). Retain and inspect the candidate archive and pack metadata outside the source tree. Do not run `npr prepare` as a preview, manually date the changelog for this path, or create a release tag: the eventual Actions run owns its release edits and tag.
+
+The staged candidate exists only to bootstrap registry access and will be rejected. It is not the final release artifact: Actions later prepares, validates, and retains its own exact archive from the reviewed default branch.
+
+### 3. Stage Without Approving
+
+With explicit staging approval, upload the retained candidate, substituting its real absolute path:
+
+```sh
+npm stage publish /absolute/path/npm-package-release-0.1.0.tgz --tag bootstrap --access public --ignore-scripts --registry=https://registry.npmjs.org
+npm stage list npm-package-release --json --registry=https://registry.npmjs.org
+npm stage view STAGE_ID_FROM_OUTPUT --registry=https://registry.npmjs.org
+```
+
+Record the returned stage ID and inspect its package name, version, tag, and checksum. Confirm the registry contains the expected placeholder and that `0.1.0` is staged, not publicly released. The placeholder is public even though the candidate contents are private. Do not approve the candidate, stage another copy after an ambiguous error, or create another placeholder blindly; inspect actual registry/stage state first.
+
+### 4. Configure GitHub and npm
+
+Obtain separate setup approval and follow [Trusted Publishing Setup](#trusted-publishing-setup). Create the `release` environment restricted to `master`; review effective branch rules and explicitly authorize any removal of blocking PR requirements. Retain force-push/deletion protections and no bypass actors. Allowing direct release commits also permits fast-forward direct pushes by all writers, not only Actions.
+
+Configure npm for `dblock/npm-package-release`, caller `self-release.yml`, environment `release`, and direct `npm publish` permission. Use the website or the verified CLI syntax below; complete browser 2FA yourself:
+
+```sh
+npm trust github npm-package-release --file self-release.yml --repo dblock/npm-package-release --env release --allow-publish --registry=https://registry.npmjs.org
+npm trust list npm-package-release --json --registry=https://registry.npmjs.org
+```
+
+Read back the exact saved publisher and GitHub settings. No npm publish token, `NODE_AUTH_TOKEN`, or repository-variable gate is needed. A newly configured publisher must successfully publish within two days; configure it when the remaining steps can be completed.
+
+### 5. Remove the Pending Candidate
+
+With explicit rejection approval, inspect and reject only the recorded candidate; replace `STAGE_ID_FROM_OUTPUT` with its actual ID. Rejection requires maintainer 2FA:
+
+```sh
+npm stage view STAGE_ID_FROM_OUTPUT --registry=https://registry.npmjs.org
+npm stage reject STAGE_ID_FROM_OUTPUT --registry=https://registry.npmjs.org
+npm stage list npm-package-release --json --registry=https://registry.npmjs.org
+npm view npm-package-release versions --json --registry=https://registry.npmjs.org
+npm view npm-package-release@0.1.0 --json --registry=https://registry.npmjs.org
+npm trust list npm-package-release --json --registry=https://registry.npmjs.org
+```
+
+Verify the candidate is gone, the placeholder package and intended publisher still exist, and `0.1.0` returns a structured missing-version response. Do not assume rejection preserves bootstrap state without checking it. Authentication, network, malformed responses, an unexpected owner/publisher, or a published `0.1.0` are stop conditions, not permission to retry staging or publication.
+
+### 6. Authorize the Real Release
+
+Merge the reviewed documentation/setup changes before dispatch. Confirm clean reviewed `master`, no conflicting release tag or pending `0.1.0` stage, the exact npm publisher, and effective GitHub permissions. Only with explicit release authorization, use [Automated Self-release](#automated-self-release) to publish `0.1.0` from Actions.
+
+The workflow dates the changelog, validates and publishes its retained archive, creates the matching GitHub Release/tag, and prepares `0.1.1`. Verify the explicit `0.1.0` registry checksums, retained artifact, tag target, and provenance; do not verify against the now-advanced manifest. Add the npm version badge only after confirming the real release, not after the placeholder appears. Inspect recovery evidence before any retry.
+
+## Manual Publication Alternative
 
 After explicit release authorization, prepare a release-metadata PR through normal review: select an unpublished version, synchronize the manifest/lockfile, date its changelog heading, and remove the placeholder. After merging, record the clean default-branch commit and save the reviewed notes alongside the retained archive.
 
@@ -28,7 +99,7 @@ After registry confirmation, use a follow-up PR for the next development version
 
 ## Trusted Publishing Setup
 
-The [self-release caller](https://github.com/dblock/npm-package-release/blob/master/.github/workflows/self-release.yml) is implemented in advance of the initial publication. Before dispatching, verify the first manual release and explicitly authorize the publisher/environment/protection setup below. No enablement variable is required.
+The [self-release caller](https://github.com/dblock/npm-package-release/blob/master/.github/workflows/self-release.yml) can publish the first real release after a verified staged bootstrap, or subsequent releases after manual publication. Before dispatching, verify the chosen bootstrap, clear any conflicting pending stage, and explicitly authorize the publisher/environment/protection setup below. No enablement variable is required.
 
 Configure a `release` environment restricted to the default branch and the npm GitHub Actions trusted publisher for owner `dblock`, repository `npm-package-release`, calling workflow filename `self-release.yml`, environment `release`, and direct `npm publish` permission. Both caller and reusable workflow grant `contents: write` and `id-token: write`; the reusable workflow uses a GitHub-hosted runner. npm checks the caller filename, not the called `release.yml`. Newly configured publishers must complete a successful publication within two days under the [current npm policy](https://docs.npmjs.com/trusted-publishers/); configuration alone does not prove OIDC works.
 
