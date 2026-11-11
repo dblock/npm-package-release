@@ -12,6 +12,7 @@ export async function command(program: string, args: string[], options: CommandO
   const env = { ...process.env, ...options.env };
   delete env.npm_config_call;
   delete env.npm_config_package;
+  delete env.npm_config_offline;
   if (program === "npm" && (env.npm_execpath || process.platform === "win32")) {
     args = [env.npm_execpath || join(dirname(process.execPath), "node_modules/npm/bin/npm-cli.js"), ...args];
     program = process.execPath;

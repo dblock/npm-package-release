@@ -58,3 +58,31 @@ export default Workflow.start().then(new ProjectRelease());
   assert.equal(unsupported.status, 1);
   assert.match(unsupported.stderr, /implementing prepare and run/u);
 });
+
+test("the CLI includes failed command stdout in stderr without hiding the command error", async (t) => {
+  const cwd = await mkdtemp(join(tmpdir(), "npr-cli-output-"));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const entry = fileURLToPath(new URL("../bin/npr.js", import.meta.url));
+  const library = new URL("../dist/index.js", import.meta.url).href;
+  const commands = new URL("../dist/command.js", import.meta.url).href;
+  await writeFile(join(cwd, "npr.config.mjs"), `
+import process from "node:process";
+import { Workflow } from ${JSON.stringify(library)};
+import { command } from ${JSON.stringify(commands)};
+class FailedValidation {
+  id = "failed-validation";
+  async run() {
+    await command(process.execPath, ["-e", 'console.log("Failing test details"); console.error("Validation failed"); process.exit(1);']);
+  }
+}
+export default Workflow.start().then(new FailedValidation());
+`);
+  const failure = spawnSync(process.execPath, [entry, "release", "--config", "npr.config.mjs"], {
+    cwd, encoding: "utf8",
+  });
+  assert.equal(failure.status, 1);
+  assert.equal(failure.stdout, "");
+  assert.match(failure.stderr, /^\[npr\] Command failed:/u);
+  assert.match(failure.stderr, /\nValidation failed\n/u);
+  assert.match(failure.stderr, /\nFailing test details\n/u);
+});

@@ -70,6 +70,8 @@ npm exec --offline -- npr prepare --artifacts /path/to/artifacts
 npm exec --offline -- npr verify --artifacts /path/to/retained-artifacts
 ```
 
+`--offline` prevents npm from downloading missing release tooling; install the package first. It does not make the release offline: child commands discard inherited npm-exec lookup flags so validation and consumer installs can access the registry. Explicit child-command flags such as `npm install --offline` still apply.
+
 `release` publishes and pushes: obtain authorization and configure authentication first. It releases the checked-in version unless `--version` selects a numeric version, then prepares the next patch version. `--config` defaults to `npr.config.js`; use an ESM file (`.mjs` when the consumer declares CommonJS). `--artifacts` overrides the default Git-metadata directory. Empty version/artifact values are treated as unset. Put artifacts outside the source tree or in an ignored directory.
 
 Those version/next-development defaults describe `ReleaseWorkflow`. Export `new SemanticReleaseWorkflow()` to opt into Conventional Commits versioning and generated notes instead; it leaves next-development preparation disabled unless configured. See [Semantic Releases](semantic.md) for policies and replacement classes. The same CLI commands and Actions inputs apply.
@@ -78,7 +80,7 @@ Those version/next-development defaults describe `ReleaseWorkflow`. Export `new 
 
 `prepare` stops after validation, archive construction, local tagging, and bundle creation, without publishing or pushing. Preserve the entire directory durably before invoking `release` with the same intended checkout and inputs. Release independently repeats preparation and reconciles matching outputs; there is no restoration command. Both accept `--config`, `--version`, and `--artifacts`; see [Recovery and Reconciliation](recovery.md).
 
-Help/version and phase reports go to standard output. Errors go to standard error with exit status 1. Success, including visibility timeout with an explicitly unverified result, returns 0. Machine-readable state belongs in `release.json`, not parsed human log lines. Reports follow lifecycle order; there is no sorting, deduplication, or source-location diagnostic format. Unknown options/positionals fail; standalone `--help`/`--version` cannot be combined, and `verify` rejects release-only options.
+Help/version and phase reports go to standard output. Errors go to standard error with exit status 1, including captured standard output from failed child commands so test failures remain visible. Success, including visibility timeout with an explicitly unverified result, returns 0. Machine-readable state belongs in `release.json`, not parsed human log lines. Reports follow lifecycle order; there is no sorting, deduplication, or source-location diagnostic format. Unknown options/positionals fail; standalone `--help`/`--version` cannot be combined, and `verify` rejects release-only options.
 
 Representative release output:
 
