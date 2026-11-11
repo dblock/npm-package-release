@@ -11,6 +11,10 @@ on:
         description: Compatible npm CLI version with Trusted Publishing support.
         type: string
         default: '12'
+      build:
+        description: Build the checkout with npm run build before invoking the CLI.
+        type: boolean
+        default: false
       config:
         description: Trusted ESM configuration module in the calling repository.
         type: string
@@ -60,6 +64,9 @@ jobs:
         run: npm install --global "npm@$NPR_NPM_VERSION"
       - name: Install Project Dependencies
         run: npm ci
+      - name: Build Release Tooling
+        if: ${{ inputs.build }}
+        run: npm run build
       - name: Configure Git Identity
         run: |
           git config --local user.name 'github-actions[bot]'

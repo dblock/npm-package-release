@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { fileURLToPath, URL } from "node:url";
 import test from "node:test";
+import process from "node:process";
 import workflow from "../npr.config.js";
+import { checkActions } from "./helpers/actions.js";
 import { checkSelfRelease } from "./helpers/self-release.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
 
@@ -15,4 +17,10 @@ test("the repository configuration rejects a broken installed SDK before publica
   assert.equal(fixture.published.length, 0);
   assert.equal((await fixture.state()).failedStep, "build");
   assert.equal(await fixture.git("tag", "--list"), "");
+});
+
+test("the self-release Actions commands build the checkout and complete its retained archive without republishing", {
+  skip: process.platform === "win32",
+}, async (t) => {
+  await checkActions(t, undefined, [".github/workflows/self-release.yml"]);
 });

@@ -1,0 +1,24 @@
+name: Release This Library
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional numeric release version overriding package.json.
+        type: string
+      timezone:
+        description: Named timezone for release dates and Git timestamps.
+        type: string
+        default: UTC
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yml
+    with:
+      build: true
+      version: ${{ inputs.version }}
+      timezone: ${{ inputs.timezone }}

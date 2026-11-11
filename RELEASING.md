@@ -14,7 +14,7 @@ The root [release configuration](https://github.com/dblock/npm-package-release/b
 
 Build before invoking the checkout's CLI with `node bin/npr.js`. The configuration is repository maintenance code, not a packaged default for consumers. Tests copy it unchanged into isolated SDK projects, simulate publication/hosting, and exercise both compiled source and the actual installed tarball. They do not publish this package or prove live authentication.
 
-Do not invoke `release` or `prepare` as a read-only preview: they edit files and create local commits/tags, and `release` also publishes and pushes. The reusable `release.yml` accepts `workflow_call`; it is not this repository's own manually dispatched publishing workflow. Self-publication automation still requires separate setup authorization.
+Do not invoke `release` or `prepare` as a read-only preview: they edit files and create local commits/tags, and `release` also publishes and pushes. The reusable `release.yml` accepts `workflow_call` for consumers and this library itself. This repository's manually dispatched `self-release.yml` calls it locally with `build: true`; there is no repository-variable gate. Do not dispatch until the setup below is verified and publication is explicitly authorized.
 
 ## Manual Publication
 
@@ -28,11 +28,27 @@ After registry confirmation, use a follow-up PR for the next development version
 
 ## Trusted Publishing Setup
 
-After verifying the initial registry release, use a focused PR to configure a manually dispatched publishing workflow on a GitHub-hosted runner, a `release` environment restricted to the default branch, and `contents: write` / `id-token: write`. The existing reusable workflow must remain available to consumers. Set up the package's trusted publisher only with explicit authorization, for `dblock/npm-package-release`, the actual calling workflow filename, environment `release`, and direct `npm publish` permission. Newly configured publishers must complete a successful publication within two days under the [current npm policy](https://docs.npmjs.com/trusted-publishers/); configuration alone does not prove OIDC works.
+The [self-release caller](https://github.com/dblock/npm-package-release/blob/master/.github/workflows/self-release.yml) is implemented in advance of the initial publication. Before dispatching, verify the first manual release and explicitly authorize the publisher/environment/protection setup below. No enablement variable is required.
+
+Configure a `release` environment restricted to the default branch and the npm GitHub Actions trusted publisher for owner `dblock`, repository `npm-package-release`, calling workflow filename `self-release.yml`, environment `release`, and direct `npm publish` permission. Both caller and reusable workflow grant `contents: write` and `id-token: write`; the reusable workflow uses a GitHub-hosted runner. npm checks the caller filename, not the called `release.yml`. Newly configured publishers must complete a successful publication within two days under the [current npm policy](https://docs.npmjs.com/trusted-publishers/); configuration alone does not prove OIDC works.
 
 Use compatible current stable Node.js/npm tooling; npm 12 has a higher runtime floor than consumers. npm validates the calling workflow filename for reusable workflows, and both callers and called workflows need OIDC permission. Do not use `NODE_AUTH_TOKEN` or stored long-lived npm tokens. Trusted Publishing automatically supplies provenance for public packages from public GitHub repositories.
 
-Release automation is planned to publish the retained archive, atomically push the release commit/tag, verify remote refs, create the GitHub Release, validate/push the next development iteration, then verify the explicit published version and retained archive. Authorization to configure this direct-push flow includes removing PR requirements that block release commits while retaining force-push/deletion protections with no bypass actors. This permits fast-forward direct pushes by all writers, not only the workflow; ordinary development still requires PRs. No such setup or protection change is authorized yet.
+Before dispatching, explicitly authorize and remove PR requirements that block the workflow's release and next-development commits, retaining active force-push/deletion protections with no bypass actors. Inspect effective repository and inherited protections, not just one ruleset. This permits fast-forward direct pushes by all writers, not only the workflow; ordinary development still requires PRs. No publisher, environment, or protection change has been performed by implementing this workflow.
+
+## Automated Self-release
+
+After separate release authorization, dispatch **Release This Library** from `master`:
+
+```sh
+gh workflow run self-release.yml --ref master --repo dblock/npm-package-release
+```
+
+The caller forwards optional `version` and `timezone` (UTC) inputs to `./.github/workflows/release.yml` with `build: true`. That shared workflow owns default-branch/manual-dispatch guards, the release environment, permissions, concurrency, tooling, Git identity, checkpoint uploads, and publication. It installs Node.js 26/npm 12 and dependencies, builds this checkout, then invokes its own CLI through `npm exec --offline -- npr` with the root `npr.config.js`. It does not install a previously published copy of this library. Consumers leave `build` at its default `false` and use their installed tool.
+
+Preparation validates tests/lint and the actual installed archive, then uploads an immutable checkpoint including hidden files before publication is allowed. Completion publishes that exact archive, atomically pushes the release commit/tag, verifies remote refs, creates the GitHub Release, validates/pushes the next development iteration, and verifies the explicit published version and retained archive. The final artifact upload runs even after failure. Both uploads retain their files for 30 days; preserve them elsewhere before expiry when investigating an incomplete release.
+
+Local tests run the workflow's actual dependency-install, TypeScript-build, prepare, complete, and verify commands against an isolated SDK checkout and Git remote. They copy the root release configuration unchanged, simulate only registry/hosting operations, retain a checkpoint before publication, and verify repeated completion does not republish. They do not prove live OIDC, provenance, or Actions uploads.
 
 ## Verification and Recovery
 
@@ -41,3 +57,5 @@ Registry visibility can lag accepted publication. Retry only missing-version vis
 Before retrying a failed release, inspect registry state, remote commits/tags, GitHub Releases, and retained archives, checksums, and recovery metadata. Complete only missing steps; never duplicate accepted publication or move a tag. Preserve hidden recovery files and record verification limits. Local simulations exercise publication ordering and recovery, not live OIDC or Actions artifact uploading.
 
 The consumer Actions interfaces now require a successful immutable checkpoint upload before publication, then preserve later diagnostics separately. Explicit `npr complete` restores that checkpoint and reconciles actual outputs rather than trusting journal phases; local callers arrange their own durable storage. See [Checkpoints and Reconciliation](docs/checkpoints.md) for the contract and migration of custom run-only workflows. This does not authorize dispatching or publishing this package itself.
+
+For self-release recovery, download `npm-release-checkpoint-<run-id>-<run-attempt>` from the failed run and preserve the separate `npm-release-<run-id>-<run-attempt>` diagnostics. Do not start a new dispatch as a publication retry. After inspection and explicit recovery authorization, build the reviewed checkout with `npm ci` and `npm run build`, then use `node bin/npr.js complete --config npr.config.js --artifacts /absolute/path/to/downloaded-checkpoint`. This reconciles the original archive rather than preparing another one. Use `node bin/npr.js verify --artifacts /absolute/path/to/downloaded-checkpoint` for verification without publication or Git changes.
