@@ -32,6 +32,8 @@ On Unix, the self-release workflow fixture also starts without `dist/`, follows 
 
 Initial release implementation should approach full line and branch coverage of project-owned runtime code with meaningful behavior tests, including subprocesses and error paths; report remaining gaps rather than hiding code or adding trivial assertions. Simulate publication and hosting, but exercise real Git remotes, npm archives, and consumer installation. Consumer checks do not validate live Actions authentication or artifact uploads.
 
+The optional `npm-package-release/testing` entry point is public production package code, not an import of private test fixtures. Its tests cover owned cleanup, inherited-environment isolation, explicit-file preflight, symlink boundaries, exact local archives, failures, and retry conflicts. Run the shared lifecycle example with `node --test examples/lifecycle-hooks/release.test.js`; packed validation runs that actual installed example and checks the public testing declarations. See [Testing Custom Workflows](docs/testing.md).
+
 Coverage includes the root release configuration and maps compiled execution back to TypeScript. Exclude only the empty JavaScript generated from `contracts.ts`, which contains interfaces/types and no executable implementation; its guarantees are checked by contract fixtures rather than runtime coverage.
 
 Keep `Test`, `Lint`, and `Package` workflows separate. Use explicit `matrix.entry` lists of compact inline objects, not `include`/`exclude` or Cartesian axes. Maintain Coveralls coverage upload; JavaScript Danger checks are not configured.

@@ -16,4 +16,5 @@
 - [#13](https://github.com/dblock/npm-package-release/pull/13): Reuse the release workflow for this library's own checkout SDK with optional tooling builds, durable prepublication checkpoints, and documented setup/recovery - [@dblock](https://github.com/dblock).
 - [#14](https://github.com/dblock/npm-package-release/pull/14): Support categorized Intridea notes and opt-in Keep a Changelog contribution templates with safe prompt/category cleanup - [@dblock](https://github.com/dblock).
 - [#15](https://github.com/dblock/npm-package-release/pull/15): Add source-preserving Markdown section updates with exact-heading validation for release-managed documentation - [@dblock](https://github.com/dblock).
+- [#16](https://github.com/dblock/npm-package-release/pull/16): Add an optional consumer testing kit with disposable Git projects, local publication adapters, safe explicit fixture copying, and an executable lifecycle example - [@dblock](https://github.com/dblock).
 - Your contribution here.

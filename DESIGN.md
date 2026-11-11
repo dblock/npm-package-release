@@ -68,6 +68,8 @@ Release tests run the real implementation with isolated Git remotes, npm test/li
 
 Keep this document focused on the current design and relevant rationale, removing superseded proposals rather than maintaining an implementation diary.
 
+The optional `npm-package-release/testing` export supplies disposable local Git projects and explicit publisher/host adapters without depending on `node:test`. It scrubs inherited command environments and validates explicit file copies against canonical roots. Test archives are immutable local outputs with real checksums; adapters do not model live authentication or sandbox arbitrary callbacks. The packaged lifecycle example shares the production builder with source/installed consumer tests; see [Testing Custom Workflows](docs/testing.md).
+
 ## Artwork
 
 The logo is a single package box with an upward release arrow and a white packing-tape detail. Its simple geometry and red (`#cb3837`)/white palette draw on the [npm](https://www.npmjs.com) visual aesthetic; the illustration is original artwork, not a copy of the npm wordmark or an endorsement by npm. GitHub Copilot created the geometric SVG for this project on behalf of @dblock. No third-party artwork or fonts are embedded; both assets use the project's [MIT license](LICENSE).
