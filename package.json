@@ -16,6 +16,7 @@
   "files": [
     "dist/",
     "bin/",
+    "assets/",
     "AGENTS.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
