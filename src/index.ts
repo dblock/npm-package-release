@@ -7,6 +7,7 @@ export { readCheckpoint } from "./checkpoint.js";
 export type { ReleaseCheckpoint } from "./checkpoint.js";
 export { releaseChangelog, nextChangelog } from "./changelog.js";
 export type { ChangelogTemplate } from "./changelog.js";
+export { MarkdownSection } from "./markdown.js";
 export type * from "./contracts.js";
 export { Workflow } from "./workflow.js";
 export { LifecycleHooks } from "./lifecycle.js";

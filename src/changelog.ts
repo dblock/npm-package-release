@@ -1,7 +1,5 @@
-import { fromMarkdown } from "mdast-util-from-markdown";
-import { gfmFromMarkdown } from "mdast-util-gfm";
-import { gfm } from "micromark-extension-gfm";
 import { numericVersion } from "./command.js";
+import { markdownDocument as document, markdownHeadings as headings, markdownSection as section } from "./markdown.js";
 import type { Nodes } from "mdast";
 import type { ChangelogFormat } from "./contracts.js";
 
@@ -23,29 +21,6 @@ export function changelogTemplate(format: ChangelogFormat, template: ChangelogTe
     throw new Error("Changelog sections must be unique nonempty single-line names.");
   }
   return Object.freeze({ placeholder, sections: Object.freeze([...sections]) });
-}
-
-function document(source: string) {
-  return fromMarkdown(source, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
-}
-
-function headings(source: string) {
-  return document(source).children.filter((node) => node.type === "heading").map((node) => ({
-    node,
-    text: source.slice(node.position!.start.offset!, node.position!.end.offset!)
-      .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "").replace(/[ \t]+#+[ \t]*$/u, ""),
-  }));
-}
-
-function section(source: string, pattern: RegExp) {
-  const all = headings(source);
-  const matches = all.filter(({ text }) => pattern.test(text));
-  if (matches.length !== 1) throw new Error("Expected exactly one matching changelog heading.");
-  const { node, text } = matches[0];
-  const end = all.find(({ node: other }) =>
-    other.position!.start.offset! > node.position!.start.offset! && other.depth <= node.depth,
-  )?.node.position!.start.offset ?? source.length;
-  return { node, text, start: node.position!.start.offset!, body: node.position!.end.offset!, end };
 }
 
 function hasNotes(node: Nodes): boolean {

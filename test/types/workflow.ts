@@ -3,7 +3,7 @@ import {
   PublishArtifact, release, ReleaseWorkflow,
   LocalExecutionProvider, prepare, complete,
   SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator,
-  LifecycleHooks,
+  LifecycleHooks, MarkdownSection,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
@@ -70,6 +70,9 @@ new ReleaseWorkflow({ changelog: new KeepAChangelog("docs/CHANGES.md"), validato
 new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
 new KeepAChangelog("CHANGELOG.md", { placeholder: "* Contribute.", sections: ["Added", "Fixed"] });
 new IntrideaChangelog("CHANGELOG.md", { placeholder: "* Contribute." });
+new MarkdownSection("README.md", "## Stable").replace("New.", { cwd: "." });
+// @ts-expect-error Markdown section bodies must be strings.
+new MarkdownSection("README.md", "## Stable").replace(123);
 // @ts-expect-error Template sections are an array of names.
 new KeepAChangelog("CHANGELOG.md", { sections: "Added" });
 // @ts-expect-error Intridea always requires a contribution placeholder.
