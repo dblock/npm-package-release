@@ -22,6 +22,8 @@ Local callers must arrange their own durable storage. `npr release` writes a loc
 
 Completion validates the checkpoint, retained archive, notes, bundle, Git tree/parent, and repository relationship. A fresh checkout of the configured branch can import the bundle and advance to the exact prepared release commit. Existing matching release/next-development checkouts are preserved. The release version comes from the checkpoint, never the advanced manifest.
 
+Opt-in [semantic releases](semantic.md) additionally retain the immutable analysis decision and next-development policy. Completion binds the decision to source/version/notes without rerunning analysis and rejects a different workflow mode or next-development setting. Numeric checkpoints remain compatible. Semantic checkpoints contain full analyzed commit messages; preserve repository access controls.
+
 `release.json` remains replaceable diagnostic state. Completion does not consult its phase to decide which operations to run, and changing a phase to `published` or `next` cannot skip a registry lookup or push verification. The immutable checkpoint is not rewritten when diagnostics advance.
 
 ## Reconcile Actual Outputs

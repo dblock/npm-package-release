@@ -12,6 +12,7 @@ import { releaseFixture } from "../helpers/release-fixture.js";
 import { checkActions } from "../helpers/actions.js";
 import { command } from "../../dist/command.js";
 import { checkComposition } from "../helpers/composition.js";
+import { checkSemanticRelease } from "../helpers/semantic.js";
 
 test("the actual tarball installs with strict engines and exposes its API and CLI", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "npm-package-release-consumer-"));
@@ -75,9 +76,10 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   checkCli((args) => npm(["exec", "--silent", "--offline", "--", "npr", ...args], consumer));
   const installedApi = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/dist/index.js")).href);
   await checkComposition(t, installedApi);
+  await checkSemanticRelease(t, installedApi);
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, complete } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, complete, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease } from "npm-package-release";
 import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, CheckpointWorkflow } from "npm-package-release";
 class Inspect implements Step<PreparedRelease, PreparedRelease> {
   readonly id = "inspect";
@@ -97,6 +99,11 @@ export async function staged(options: ReleaseOptions) {
   built.state.artifact.integrity satisfies string;
   return complete(workflow, options);
 }
+export const semantic = new SemanticReleaseWorkflow({ nextDevelopment: false });
+semantic satisfies CheckpointWorkflow;
+Workflow.start<ReleaseOptions>().then(new AnalyzeSemanticRelease()).then(new InitializeSemanticRelease());
+// @ts-expect-error A semantic initializer needs an immutable analyzed decision.
+Workflow.start<ReleaseOptions>().then(new InitializeSemanticRelease());
 // @ts-expect-error Prepared releases cannot skip artifact validation.
 flow.then(new PublishArtifact());
 `);

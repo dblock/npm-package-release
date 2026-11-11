@@ -16,6 +16,8 @@ Keep domain `Release` data, immutable execution metadata, and provider clients s
 
 Keep new-release duplicate guards strict. Checkpoint completion must reconcile actual registry checksums, Git trees/refs, and hosted outputs, never use `release.json` phase flags as permission to skip or republish. Validate immutable checkpoint evidence before mutation, never rewind descendants or overwrite conflicting assets/tags, and gate Actions completion on a successful prepublication upload. Test fresh-checkout restoration, ambiguous acceptance, failed/repeated completion, and changed evidence. See [Checkpoints and Reconciliation](docs/checkpoints.md).
 
+Keep semantic releases opt-in and numeric/manual-changelog behavior unchanged. Separate history, analysis, selection, and notes services; bind the frozen decision to source/version/notes, persist its next-development policy, and never reanalyze during completion. No eligible changes fail before project edits, not a successful skip. Test reachable/annotated tags, reverts, overrides, policy conflicts, and installed semantic consumers. See [Semantic Releases](docs/semantic.md).
+
 Maintain separate `Test`, `Lint`, and `Package` workflows and Coveralls upload. Use explicit `matrix.entry` lists of compact inline objects, not `include`/`exclude` or Cartesian axes. Type-check runtime and positive/negative contract fixtures; lint TypeScript, JavaScript, YAML, Markdown, embedded JavaScript, and spelling with `npm run lint`. Enforce title-case headings/display names, preserve proper names/expressions, and keep reviewed vocabulary in `.spellcheck.txt`. Run `actionlint .github/workflows/*.yml examples/*.yml` when changing workflow interfaces. JavaScript Danger checks are not configured.
 
 ## Documentation and Versions

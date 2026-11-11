@@ -68,6 +68,8 @@ The outer class implements `Step<ReleaseOptions, ReleaseState>` and `CheckpointW
 
 Export `new ReleaseWorkflow(config, services, provider?)` to use the standard sequence without listing every step. `await release(workflow, options)` and `await workflow.run(options)` execute a composed workflow; the return type is the final step's output. Options include `cwd`, `version`, `artifacts`, `run`, `log`, scoped `env`, `provider`, and `observer`. See [Execution Providers and Contexts](execution.md) for platform selection, run metadata, and lifecycle reporting.
 
+`SemanticReleaseWorkflow` adds replaceable history, analyzer, selector, and generated-note classes ahead of preparation, while keeping the same staged contract. Its defaults do not require a manual changelog or create a next-development commit. See [Semantic Releases](semantic.md) for typed analysis steps, service interfaces, rules, and immutable decisions.
+
 ## Replace Services
 
 `InitializeRelease(config, services)` and `ReleaseWorkflow(config, services)` accept instances implementing these contracts. Omitted services use the defaults; no inheritance or global registration is required.

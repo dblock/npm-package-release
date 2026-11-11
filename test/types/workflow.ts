@@ -2,12 +2,14 @@ import {
   Workflow, InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact,
   PublishArtifact, release, ReleaseWorkflow,
   LocalExecutionProvider, prepare, complete,
+  SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
   ReleaseHost, ReleaseStore, ReleaseRepository, PackageProject, RegistryVerifier, ReleaseServices,
   ExecutionContext, ExecutionProvider,
   ReleaseCheckpoint, CheckpointWorkflow,
+  SemanticHistory, CommitAnalyzer, SemanticVersionPolicy, SemanticNotes, SemanticDecision,
 } from "../../src/index.js";
 
 class InspectArtifact implements Step<BuiltRelease, BuiltRelease> {
@@ -74,6 +76,22 @@ export function immutableCheckpoint(checkpoint: ReleaseCheckpoint) {
   checkpoint.source.releaseCommit = "changed";
   // @ts-expect-error A checkpoint is data, not a workflow with publication capabilities.
   complete(checkpoint);
+}
+export function semanticContracts(history: SemanticHistory, analyzer: CommitAnalyzer, selector: SemanticVersionPolicy, notes: SemanticNotes) {
+  const workflow = new SemanticReleaseWorkflow({}, { history, analyzer, selector, notes });
+  workflow satisfies CheckpointWorkflow<BuiltRelease, Awaited<ReturnType<typeof workflow.complete>>>;
+  Workflow.start<ReleaseOptions>().then(new AnalyzeSemanticRelease()).then(new InitializeSemanticRelease());
+  // @ts-expect-error Semantic initialization requires an analyzed decision.
+  Workflow.start<ReleaseOptions>().then(new InitializeSemanticRelease());
+  // @ts-expect-error An analyzer must return a supported release type.
+  new SemanticReleaseWorkflow({}, { analyzer: { analyze() { return "anything"; } } });
+  return workflow;
+}
+export function immutableDecision(decision: SemanticDecision) {
+  // @ts-expect-error Semantic selections cannot be changed after analysis.
+  decision.version = "9.0.0";
+  // @ts-expect-error Captured history is deeply immutable.
+  decision.commits[0].message = "Changed";
 }
 // @ts-expect-error Service implementations must satisfy the complete interface.
 new ReleaseWorkflow(config, { publisher: { async publish() {} } });

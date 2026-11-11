@@ -6,6 +6,7 @@ import { inc, valid } from "semver";
 import { numericVersion } from "./command.js";
 import { releaseChangelog, nextChangelog } from "./changelog.js";
 import { matchingPublication } from "./package.js";
+import { semanticPlan } from "./semantic.js";
 import type {
   Artifact, ArtifactContext, Changelog, ChangelogConfig, Command, HookContext, Log, PackagePublisher,
   RegistryVerifier, ReleaseConfig, ReleaseHost, ReleaseIdentity, ReleaseState, ReleaseStore,
@@ -24,6 +25,7 @@ export function snapshot<State extends ReleaseState>(state: State): Readonly<Sta
     ...state,
     verificationOptions: Object.freeze({ ...state.verificationOptions }),
     ...(state.artifact ? { artifact: Object.freeze({ ...state.artifact }) } : {}),
+    ...(state.semantic ? { semantic: semanticPlan(state.semantic) } : {}),
   });
 }
 

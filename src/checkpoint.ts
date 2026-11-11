@@ -4,11 +4,14 @@ import { basename, join } from "node:path";
 import { numericVersion } from "./command.js";
 import { Release } from "./release-description.js";
 import { verificationOptions } from "./services.js";
+import { semanticPlan } from "./semantic.js";
+import type { SemanticPlan } from "./semantic.js";
 import type { ReleaseDescription } from "./release-description.js";
 import type { Artifact, RepositoryCheckpoint, VerificationOptions } from "./contracts.js";
 import type { BuiltRelease } from "./steps.js";
 
 export interface ReleaseCheckpoint {
+  readonly semantic?: SemanticPlan;
   readonly schema: 1;
   readonly release: ReleaseDescription;
   readonly source: RepositoryCheckpoint;
@@ -34,6 +37,7 @@ export async function writeCheckpoint({ runtime, state, release }: BuiltRelease)
     artifact: state.artifact, timezone: state.timezone, verificationOptions: state.verificationOptions,
     notesDigest: await fileDigest(join(directory, "release-notes.md")),
     bundleDigest: await fileDigest(join(directory, "release.bundle")),
+    ...(state.semantic ? { semantic: state.semantic } : {}),
   };
   await writeFile(join(directory, "checkpoint.json"), JSON.stringify(checkpoint, null, 2) + "\n", { flag: "wx" });
 }
@@ -66,6 +70,11 @@ export async function readCheckpoint(directory: string): Promise<ReleaseCheckpoi
   if (await readFile(join(directory, "release-notes.md"), "utf8") !== (release.notes || "") + "\n") {
     throw new Error("Checkpoint release notes differ.");
   }
+  const semantic = checkpoint.semantic === undefined ? undefined : semanticPlan(checkpoint.semantic);
+  if (semantic) {
+    semantic.decision.check(source.initialCommit, release.version);
+    if (semantic.decision.notes !== release.notes) throw new Error("Checkpoint notes differ from semantic decision.");
+  }
   return Object.freeze({
     schema: 1, release,
     source: Object.freeze({
@@ -75,5 +84,6 @@ export async function readCheckpoint(directory: string): Promise<ReleaseCheckpoi
     artifact: Object.freeze({ filename: artifact.filename, integrity: artifact.integrity, shasum: artifact.shasum }),
     timezone: checkpoint.timezone, verificationOptions: verificationOptions(checkpoint.verificationOptions),
     notesDigest: checkpoint.notesDigest, bundleDigest: checkpoint.bundleDigest,
+    ...(semantic ? { semantic } : {}),
   });
 }

@@ -24,13 +24,12 @@ export interface CheckpointWorkflow<Prepared = unknown, Output = unknown> {
   complete(options: ReleaseOptions): Promise<Output>;
 }
 
-function finish(workflow: Workflow<ReleaseOptions, BuiltRelease>): Workflow<ReleaseOptions, ReleaseState> {
-  return workflow.then(new PublishArtifact())
-    .then(new PushRelease()).then(new CreateHostedRelease())
-    .then(new PrepareNextVersion()).then(new VerifyRelease());
+export function finishRelease(workflow: Workflow<ReleaseOptions, BuiltRelease>, nextDevelopment = true): Workflow<ReleaseOptions, ReleaseState> {
+  const hosted = workflow.then(new PublishArtifact()).then(new PushRelease()).then(new CreateHostedRelease());
+  return nextDevelopment ? hosted.then(new PrepareNextVersion()).then(new VerifyRelease()) : hosted.then(new VerifyRelease());
 }
 
-function preparationObserver(observer?: WorkflowObserver): WorkflowObserver | undefined {
+export function preparationObserver(observer?: WorkflowObserver): WorkflowObserver | undefined {
   if (!observer) return undefined;
   return {
     async started(event) { await observer.started?.(event); },
@@ -53,8 +52,8 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
       .then(new CommitRelease())
       .then(new BuildArtifact())
       .then(new CheckpointRelease());
-    this.workflow = finish(this.preparation);
-    this.completion = finish(Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider).then(new RestoreRelease(config, services)));
+    this.workflow = finishRelease(this.preparation);
+    this.completion = finishRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider).then(new RestoreRelease(config, services)));
   }
 
   async run(options: ReleaseOptions = {}, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<ReleaseState> {

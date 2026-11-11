@@ -7,4 +7,5 @@
 - [#4](https://github.com/dblock/npm-package-release/pull/4): Compose configurable release workflows from class-based steps and strongly typed service interfaces, with TypeScript declarations and a compatible default workflow - [@dblock](https://github.com/dblock).
 - [#5](https://github.com/dblock/npm-package-release/pull/5): Separate immutable release data from provider-neutral execution contexts, with injectable local/GitHub providers, frozen step history, and structured success/failure reporting - [@dblock](https://github.com/dblock).
 - [#6](https://github.com/dblock/npm-package-release/pull/6): Reconcile matching npm, Git, and hosted-release outputs and preserve immutable prepublication checkpoints through an explicit prepare/upload/complete handoff - [@dblock](https://github.com/dblock).
+- [#7](https://github.com/dblock/npm-package-release/pull/7): Add opt-in semantic releases with replaceable history, Conventional Commits analysis, version selection, generated notes, and immutable decisions without reanalysis - [@dblock](https://github.com/dblock).
 - Your contribution here.

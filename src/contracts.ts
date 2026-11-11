@@ -1,5 +1,6 @@
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
 import type { WorkflowObserver } from "./workflow.js";
+import type { SemanticPlan } from "./semantic.js";
 
 export type Environment = Readonly<Record<string, string | undefined>>;
 
@@ -34,6 +35,7 @@ export interface RegistryMetadata extends ReleaseIdentity {
 export interface VerificationOptions { readonly attempts: number; readonly delay: number }
 export type Verification = "verified" | "unverified";
 export interface ReleaseState extends ReleaseIdentity {
+  readonly semantic?: SemanticPlan;
   readonly previousVersion: string;
   readonly nextVersion: string;
   readonly date: string;
