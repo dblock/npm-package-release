@@ -3,6 +3,7 @@
 ## 0.1.1 (Next)
 
 - [#24](https://github.com/dblock/npm-package-release/pull/24): Document manual first-release approval and subsequent Trusted Publishing setup with command-first consumer instructions, verified release metadata, the npm version badge, and an npm-compatible README logo URL - [@dblock](https://github.com/dblock).
+- [#25](https://github.com/dblock/npm-package-release/pull/25): Configure Trusted Publishing for self-release with a master-only environment and verified direct-push release protections - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.1.0 (2026/11/11)
