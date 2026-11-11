@@ -1,5 +1,7 @@
 import { numericVersion } from "./command.js";
-import { markdownDocument as document, markdownHeadings as headings, markdownSection as section } from "./markdown.js";
+import {
+  markdownDocument as document, markdownHeadings as headings, markdownSection as section, newline,
+} from "./markdown.js";
 import type { Nodes } from "mdast";
 import type { ChangelogFormat } from "./contracts.js";
 
@@ -28,6 +30,29 @@ function hasNotes(node: Nodes): boolean {
   if ("value" in node) return Boolean(node.value.trim());
   if (node.type === "image") return Boolean(node.alt);
   return "children" in node ? node.children.some(hasNotes) : false;
+}
+
+export function generatedChangelog(source: string, { version, date, notes }:
+  { version: string; date: string; notes: string }): string {
+  numericVersion(version);
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Expected a YYYY-MM-DD release date.");
+  if (typeof notes !== "string" || !document(notes).children.some(hasNotes)) {
+    throw new Error("Generated release notes must not be empty.");
+  }
+  const separator = newline(source);
+  const pattern = new RegExp(`^## ${version.replaceAll(".", "\\.")}(?: |$)`, "u");
+  const all = headings(source);
+  if (all.some(({ node }) => pattern.test(source.slice(node.position!.start.offset!, node.position!.end.offset!)))) {
+    const current = section(source, pattern, true);
+    if (source.slice(current.body, current.end).replaceAll("\r\n", "\n").trim() !== notes.replaceAll("\r\n", "\n").trim()) {
+      throw new Error("Existing generated release notes differ.");
+    }
+    return source;
+  }
+  const position = all.find(({ node }) => node.depth === 2)?.node.position!.start.offset ?? source.length;
+  const prefix = source.slice(0, position).replace(/(?:\r?\n)*$/u, separator.repeat(2));
+  const entry = `## ${version} (${date.replaceAll("-", "/")})\n\n${notes.trim()}\n\n`.replace(/\r?\n/gu, separator);
+  return prefix + entry + source.slice(position);
 }
 
 function replace(source: string, edits: [number, number, string][]) {

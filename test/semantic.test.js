@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import test from "node:test";
 import * as api from "../dist/index.js";
 import { command } from "../dist/command.js";
-import { checkSemanticRelease } from "./helpers/semantic.js";
+import { checkGeneratedChangelog, checkSemanticRelease } from "./helpers/semantic.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
 
 const commit = (message, digit = "a") => ({ sha: digit.repeat(40), message });
@@ -103,6 +103,10 @@ test("semantic services are replaceable classes rather than fixed selection hook
 
 test("semantic workflow uses actual reachable tags and invocation-scoped decisions without a development bump", async (t) => {
   await checkSemanticRelease(t, api);
+});
+
+test("generated changelogs preserve history, resolve paths, and reject conflicting or empty notes without writing", async (t) => {
+  await checkGeneratedChangelog(t, api);
 });
 
 test("explicit semantic releases can opt into a next-development commit", async (t) => {

@@ -22,4 +22,5 @@
 - [#20](https://github.com/dblock/npm-package-release/pull/20): Follow ruby-gem-release's independently idempotent operations, remove checkpoint restoration and complete APIs, and preserve upload-gated reproducible artifacts with invocation-local semantic analysis - [@dblock](https://github.com/dblock).
 - [#21](https://github.com/dblock/npm-package-release/pull/21): Update README and documentation package/Actions pins to the published version during self-release development preparation - [@dblock](https://github.com/dblock).
 - [#22](https://github.com/dblock/npm-package-release/pull/22): Verify GitHub release assets without API digests by downloading and hashing their raw bytes - [@dblock](https://github.com/dblock).
+- [#23](https://github.com/dblock/npm-package-release/pull/23): Maintain dated, source-preserving changelog files from captured semantic release notes - [@dblock](https://github.com/dblock).
 - Your contribution here.

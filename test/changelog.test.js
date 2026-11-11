@@ -3,12 +3,24 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { releaseChangelog, nextChangelog } from "../dist/changelog.js";
+import { generatedChangelog, releaseChangelog, nextChangelog } from "../dist/changelog.js";
 import { IntrideaChangelog, KeepAChangelog } from "../dist/index.js";
 
 const intridea = "# Changelog\n\n## 0.1.0 (Next)\n\n- Fix Unicode offsets: caf\u00e9.\n- Your contribution here.\n";
 const keep = "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- Ship a package.\n\n## [0.0.1] - 2025-01-01\n\n- Earlier.\n\n[Unreleased]: https://github.com/a/b/compare/v0.0.1...master\n[0.0.1]: https://github.com/a/b/releases/tag/v0.0.1\n";
 const options = { version: "0.1.0", date: "2026-11-09" };
+
+test("generated changelogs validate notes, numeric versions, dates, and consistent line endings", () => {
+  for (const notes of [undefined, null, "", " \n", "### Features\n", "<!-- TODO -->", "---", "[ref]: https://example.com"]) {
+    assert.throws(() => generatedChangelog("# Changelog\n", { ...options, notes }), /must not be empty/u);
+  }
+  for (const patch of [{ version: "01.2.3" }, { date: "yesterday" }]) {
+    assert.throws(() => generatedChangelog("# Changelog\n", { ...options, notes: "- A change.", ...patch }));
+  }
+  for (const source of ["# Changelog\r\n\n", "# Changelog\r"]) {
+    assert.throws(() => generatedChangelog(source, { ...options, notes: "- A change." }), /line endings/u);
+  }
+});
 
 test("changelog classes resolve default, relative and absolute paths against the invocation directory", async (t) => {
   const cwd = await mkdtemp(join(tmpdir(), "npr-changelog-"));

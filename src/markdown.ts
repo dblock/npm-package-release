@@ -28,7 +28,7 @@ export function markdownSection(source: string, pattern: RegExp, exactLine = fal
   return { node, text, start: node.position!.start.offset!, body: node.position!.end.offset!, end };
 }
 
-function newline(source: string) {
+export function newline(source: string) {
   if (/\r(?!\n)/u.test(source) || (source.includes("\r\n") && /(?<!\r)\n/u.test(source))) {
     throw new Error("Mixed or unsupported Markdown line endings.");
   }

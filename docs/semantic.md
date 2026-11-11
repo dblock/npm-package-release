@@ -12,7 +12,7 @@ export default new SemanticReleaseWorkflow();
 
 `npr prepare` and `npr release` use this workflow without new commands or flags. The ordinary `ReleaseWorkflow` uses numeric versions and defaults to `KeepAChangelog`; both require workflow-instance exports. Publication and authentication still require authorization; choosing a semantic workflow does not configure either.
 
-The semantic workflow analyzes commits before preparing project files, generates release notes, and uses the existing validation, exact-archive, publication, Git, hosting, and bounded verification steps. It neither requires nor edits `CHANGELOG.md` by default. Existing `prepare`, validation, artifact, observer, provider, and Git settings remain available, except the manual `changelog` configuration option.
+The semantic workflow analyzes commits before preparing project files, generates release notes, and uses the existing validation, exact-archive, publication, Git, hosting, and bounded verification steps. By default, `GeneratedChangelog` creates or updates `CHANGELOG.md` with the captured notes before validation and commitment. Existing preparation, validation, artifact, observer, provider, and Git settings remain available; custom changelog services must preserve the captured notes.
 
 ## Version and History Policy
 
@@ -32,6 +32,14 @@ The semantic workflow analyzes commits before preparing project files, generates
 Recognized headers use `type(scope): subject` or `type(scope)!: subject`; scope is optional. Multiline breaking footers contribute notes. A revert with `This reverts commit SHA.` cancels its original when both occur in the analyzed range; a revert of that revert restores the original effect. Ambiguous abbreviated SHAs fail. A revert whose original predates the baseline remains a patch change.
 
 Generated notes group changes into Breaking Changes, Features, Bug Fixes, Performance Improvements, and Other Changes, escaping Markdown text and including short commit SHAs. Cancelled pairs are omitted. An explicit release with no remaining changes gets a short fallback note. A replaced analyzer does not automatically replace the notes generator's grouping.
+
+## Generated Changelog Files
+
+The default missing file begins with `# Changelog`. Preparation inserts a dated `## X.Y.Z (YYYY/MM/DD)` section before the first real level-two heading, preserving the title, preamble, historical Markdown bytes, and LF/CRLF style. Fenced or quoted example headings are not release sections. Generated notes must contain meaningful content, not only headings, comments, definitions, or separators; invalid notes never create or modify a file.
+
+A matching existing version section is reused without rewriting or changing its date. Its notes must equal the captured notes after trimming and normalizing CRLF; differing notes or duplicate matching headings fail before writing. No Next placeholder is created, even when next-development preparation is enabled. Existing historical sections are not migrated or removed.
+
+`new GeneratedChangelog(decision, path = "CHANGELOG.md")` supports direct/custom composition with an immutable `SemanticDecision`. Relative paths resolve against the invocation directory; absolute paths are accepted. To keep generated notes only in release artifacts, supply a custom `Changelog` class that returns the captured decision's notes without writing Markdown; `changelog: null` does not supply notes and fails semantic validation.
 
 ## Replace Classes and Interfaces
 
@@ -77,6 +85,6 @@ The decision captures the source SHA, baseline, full commit messages, release ty
 
 Actions saves the decision in a private runner-temporary file for this invocation and transports its path and original source inputs through the execution provider. The publication phase consumes the same bound decision without rerunning the analyzer, selector, or notes generator against its newly created tag. A new dispatch performs fresh analysis from its current checkout; downloaded artifacts never restore analysis or workflow policy. Keep invocation files private because they contain full commit messages.
 
-With the default disabled next-development policy, hosting is followed directly by verification, the manifest stays at the released version, `nextCommit` is absent, and the final diagnostic phase is `hosted`. The required `nextVersion` field still describes a planned version, not an executed step. With `nextDevelopment: true`, the normal next edits, validation, commit, push, and reconciliation apply; the generated changelog service does not edit a Markdown file.
+With the default disabled next-development policy, hosting is followed directly by verification, the manifest stays at the released version, `nextCommit` is absent, and the final diagnostic phase is `hosted`. The required `nextVersion` field still describes a planned version, not an executed step. With `nextDevelopment: true`, the normal next edits, validation, commit, push, and reconciliation apply; the generated changelog remains unchanged during that development step.
 
 See [Recovery and Reconciliation](recovery.md) for artifact preservation and recovery limits, [Composable Workflows](workflows.md) for base steps, and [Execution Providers and Contexts](execution.md) for lifecycle reporting. Native workspaces, prerelease channels, and alternate registries/hosts remain outside the built-in scope.

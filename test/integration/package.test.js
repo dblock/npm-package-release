@@ -12,7 +12,7 @@ import { releaseFixture } from "../helpers/release-fixture.js";
 import { checkActions } from "../helpers/actions.js";
 import { command } from "../../dist/command.js";
 import { checkComposition, checkDefaultChangelog } from "../helpers/composition.js";
-import { checkSemanticRelease } from "../helpers/semantic.js";
+import { checkGeneratedChangelog, checkSemanticRelease } from "../helpers/semantic.js";
 import { checkSelfRelease } from "../helpers/self-release.js";
 import { checkLifecycle } from "../helpers/lifecycle.js";
 import { checkMarkdownSection, checkMarkdownSubstitutions } from "../helpers/markdown.js";
@@ -99,10 +99,11 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   await checkMarkdownSection(t, installedApi);
   await checkMarkdownSubstitutions(t, installedApi);
   await checkSemanticRelease(t, installedApi);
+  await checkGeneratedChangelog(t, installedApi);
   await checkSelfRelease(t, join(consumer, "node_modules/npm-package-release"));
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection, GeneratedChangelog } from "npm-package-release";
 import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, LifecycleHook, LifecycleContext } from "npm-package-release";
 import { ReleaseTestProject, TestPublisher, TestReleaseHost } from "npm-package-release/testing";
 export async function testProjectContracts() {
@@ -139,6 +140,12 @@ export async function staged(options: ReleaseOptions) {
   return release(workflow, { ...options, env: built.runtime.env });
 }
 export const semantic = new SemanticReleaseWorkflow({ nextDevelopment: false });
+export function generated(decision: import("npm-package-release").SemanticDecision) {
+  const changelog: import("npm-package-release").Changelog = new GeneratedChangelog(decision, "docs/HISTORY.md");
+  // @ts-expect-error Generated changelog paths must be strings.
+  new GeneratedChangelog(decision, 123);
+  return changelog;
+}
 new ReleaseWorkflow({ changelog: new KeepAChangelog("docs/HISTORY.md"), validator: new HookValidator() });
 new ReleaseWorkflow({ changelog: new IntrideaChangelog() });
 new KeepAChangelog("CHANGELOG.md", { placeholder: "* Contribute.", sections: ["Added", "Fixed"] });

@@ -3,7 +3,7 @@ import {
   PublishArtifact, release, ReleaseWorkflow,
   LocalExecutionProvider, prepare,
   SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator,
-  LifecycleHooks, MarkdownSection,
+  LifecycleHooks, MarkdownSection, GeneratedChangelog,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
@@ -149,10 +149,14 @@ export function semanticContracts(history: SemanticHistory, analyzer: CommitAnal
   return workflow;
 }
 export function immutableDecision(decision: SemanticDecision) {
+  const changelog: Changelog = new GeneratedChangelog(decision, "docs/HISTORY.md");
+  // @ts-expect-error Generated changelog paths must be strings.
+  new GeneratedChangelog(decision, 123);
   // @ts-expect-error Semantic selections cannot be changed after analysis.
   decision.version = "9.0.0";
   // @ts-expect-error Captured history is deeply immutable.
   decision.commits[0].message = "Changed";
+  return changelog;
 }
 // @ts-expect-error Service implementations must satisfy the complete interface.
 new ReleaseWorkflow({ ...config, publisher: { async publish() {} } });
