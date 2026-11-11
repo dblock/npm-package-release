@@ -2,6 +2,8 @@
 
 For release-managed README content, use [MarkdownSection](markdown.md) inside trusted prepare/next hooks rather than regular-expression replacements.
 
+The [complete lifecycle example](../examples/lifecycle-hooks/README.md) shares its real workflow builder with disposable [consumer tests](testing.md), including exact tagged/development README checks and installed-archive validation.
+
 Both `ReleaseWorkflow` and `SemanticReleaseWorkflow` accept an immutable `LifecycleHooks` instance. Add ordered behavior without replacing the release sequence or its service classes:
 
 ```js

@@ -57,7 +57,11 @@ test("the actual tarball installs with strict engines and exposes its API and CL
     "package/dist/index.d.ts",
     "package/dist/lifecycle.js",
     "package/dist/lifecycle.d.ts",
+    "package/dist/testing.js",
+    "package/dist/testing.d.ts",
     "package/docs/hooks.md",
+    "package/docs/testing.md",
+    "package/examples/lifecycle-hooks/release.test.js",
     "package/bin/npr.js",
     "package/README.md",
     "package/LICENSE",
@@ -81,6 +85,9 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   assert.match(imported.stdout, /^\d+\.\d+\.\d+$/u);
   checkCli((args) => npm(["exec", "--silent", "--offline", "--", "npr", ...args], consumer));
   const installedApi = await import(pathToFileURL(join(consumer, "node_modules/npm-package-release/dist/index.js")).href);
+  await command(process.execPath, [
+    "--test", join(consumer, "node_modules/npm-package-release/examples/lifecycle-hooks/release.test.js"),
+  ], { cwd: consumer });
   await checkComposition(t, installedApi);
   await checkDefaultChangelog(t, installedApi);
   await checkLifecycle(t, installedApi);
@@ -91,6 +98,17 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   await writeFile(typed, `
 import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, complete, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection } from "npm-package-release";
 import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, CheckpointWorkflow, LifecycleHook, LifecycleContext } from "npm-package-release";
+import { ReleaseTestProject, TestPublisher, TestReleaseHost } from "npm-package-release/testing";
+export async function testProjectContracts() {
+  const project = await ReleaseTestProject.create();
+  new ReleaseWorkflow(project.services);
+  await project.copyFiles(".", ["README.md"]);
+  await project.dispose();
+  // @ts-expect-error Fixture copies require an explicit file list.
+  await project.copyFiles(".", "README.md");
+  new TestPublisher(".");
+  new TestReleaseHost(".");
+}
 class Inspect implements Step<PreparedRelease, PreparedRelease> {
   readonly id = "inspect";
   async run(input: PreparedRelease, execution?: ExecutionContext) {
