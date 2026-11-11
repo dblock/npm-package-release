@@ -27,10 +27,12 @@ The GitHub execution provider carries the original source commit, manifest versi
 | npm publication | Both registry SHA-512 integrity and SHA-1 match: no upload. | Structured E404 permits one upload; missing/different checksums and other lookup errors fail closed. |
 | Git release tag | Local/remote tag resolves to the intended commit: reuse it. | Create a missing matching tag; conflicting targets fail. |
 | Git push | Remote branch contains the intended commit: do not rewind it. | Push missing refs with fast-forward/atomic safeguards; divergent work fails. |
-| GitHub Release | Title, notes, tag, status, and named asset SHA-256 match: no mutation. | Add a missing asset; conflicting metadata, duplicate assets, or absent/different checksums fail. |
+| GitHub Release | Title, notes, tag, status, and named asset SHA-256 match: no mutation. | Add a missing asset; conflicting metadata, duplicate assets, or unverifiable/different checksums fail. |
 | Next development | Matching immediate development commit/tree: validate and reuse it. | Prepare it from the release commit; unrelated/later local history fails. |
 
 A failed npm upload or hosted mutation may have been accepted. The operation reads the actual output once more and accepts an exact match; it never automatically submits the mutation again. Registry visibility delays remain bounded verification outcomes after hosting and next-development preparation, not permission to republish.
+
+Asset verification uses GitHub's valid `sha256:` digest directly. When that field is missing or malformed, `GitHubReleaseHost` requires a positive safe integer asset ID and downloads through the authenticated repository-local GitHub API, ignoring browser download URLs. It hashes raw bytes in an owned temporary file and removes that file on success or failure. A valid but different digest never triggers a fallback or overwrite. Custom `Command` adapters must honor `options.output`: write binary stdout to that path (relative to `cwd` when needed), return an empty string, and reject unsuccessful commands.
 
 ## API Operations
 

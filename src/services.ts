@@ -1,5 +1,6 @@
-import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { inc, valid } from "semver";
@@ -90,7 +91,7 @@ export class GitHubReleaseHost implements ReleaseHost {
         throw new Error("Hosted release metadata differs; refusing to overwrite it.");
       }
       const assets = metadata.assets.filter((asset) => asset.name === name);
-      if (assets.length > 1 || (assets.length === 1 && assets[0].digest !== digest)) {
+      if (assets.length > 1 || (assets.length === 1 && await this.assetDigest(assets[0]) !== digest)) {
         throw new Error("Hosted release asset checksum differs or is unavailable.");
       }
       return assets.length === 1;
@@ -107,6 +108,22 @@ export class GitHubReleaseHost implements ReleaseHost {
       throw error;
     }
     if (await inspect() !== true) throw new Error("Hosted release output could not be verified.");
+  }
+
+  private async assetDigest(asset: HostedMetadata["assets"][number]): Promise<string> {
+    if (typeof asset.digest === "string" && /^sha256:[0-9a-f]{64}$/u.test(asset.digest)) return asset.digest;
+    if (!Number.isSafeInteger(asset.id) || asset.id! <= 0) {
+      throw new Error("Hosted release asset checksum differs or is unavailable: expected a positive download ID.");
+    }
+    const directory = await mkdtemp(join(tmpdir(), "npr-github-asset-"));
+    try {
+      const output = join(directory, "asset");
+      await this.run("gh", ["api", `repos/${this.repository}/releases/assets/${asset.id}`,
+        "--header", "Accept: application/octet-stream"], { output });
+      return "sha256:" + createHash("sha256").update(await readFile(output)).digest("hex");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   }
 
   private async metadata(version: string): Promise<HostedMetadata | null> {
@@ -131,7 +148,7 @@ interface HostedMetadata {
   body: string;
   draft: boolean;
   prerelease: boolean;
-  assets: { name: string; digest?: string }[];
+  assets: { name: string; digest?: string; id?: number }[];
 }
 
 export class HookValidator implements ReleaseValidator {

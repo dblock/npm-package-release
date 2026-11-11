@@ -9,6 +9,7 @@ export interface CommandOptions {
   cwd?: string;
   env?: Environment;
   timeout?: number;
+  output?: string;
 }
 
 export type Command = (program: string, args: string[], options?: CommandOptions) => Promise<string>;
