@@ -1,11 +1,10 @@
 # Changelog
 
-## 0.1.1 (Next)
+## 0.1.1 (2026/11/11)
 
 - [#24](https://github.com/dblock/npm-package-release/pull/24): Document manual first-release approval and subsequent Trusted Publishing setup with command-first consumer instructions, verified release metadata, the npm version badge, and an npm-compatible README logo URL - [@dblock](https://github.com/dblock).
 - [#25](https://github.com/dblock/npm-package-release/pull/25): Configure Trusted Publishing for self-release with a master-only environment and verified direct-push release protections - [@dblock](https://github.com/dblock).
 - [#26](https://github.com/dblock/npm-package-release/pull/26): Keep offline CLI lookup from blocking nested npm installs, test self-release with a cold npm cache, and show failed command output in CLI diagnostics - [@dblock](https://github.com/dblock).
-- Your contribution here.
 
 ## 0.1.0 (2026/11/11)
 
