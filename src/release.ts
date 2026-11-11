@@ -17,11 +17,15 @@ import {
   artifactDirectory, scopedCommand, verifyRetained,
   CheckpointRelease, RestoreRelease,
 } from "./steps.js";
-import type { BuiltRelease } from "./steps.js";
+import type { BuiltRelease, PreparedRelease } from "./steps.js";
 
 export interface CheckpointWorkflow<Prepared = unknown, Output = unknown> {
   prepare(options: ReleaseOptions): Promise<Prepared>;
   complete(options: ReleaseOptions): Promise<Output>;
+}
+
+export function checkpointRelease(workflow: Workflow<ReleaseOptions, PreparedRelease>): Workflow<ReleaseOptions, BuiltRelease> {
+  return workflow.then(new ValidateRelease()).then(new CommitRelease()).then(new BuildArtifact()).then(new CheckpointRelease());
 }
 
 export function finishRelease(workflow: Workflow<ReleaseOptions, BuiltRelease>, nextDevelopment = true): Workflow<ReleaseOptions, ReleaseState> {
@@ -45,13 +49,9 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   readonly completion: Workflow<ReleaseOptions, ReleaseState>;
 
   constructor(private readonly config: ReleaseConfig, services: Partial<ReleaseServices> = {}, provider?: ExecutionProvider) {
-    this.preparation = Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider)
+    this.preparation = checkpointRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider)
       .then(new InitializeRelease(config, services))
-      .then(new PrepareRelease())
-      .then(new ValidateRelease())
-      .then(new CommitRelease())
-      .then(new BuildArtifact())
-      .then(new CheckpointRelease());
+      .then(new PrepareRelease()));
     this.workflow = finishRelease(this.preparation);
     this.completion = finishRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider).then(new RestoreRelease(config, services)));
   }

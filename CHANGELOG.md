@@ -9,4 +9,5 @@
 - [#6](https://github.com/dblock/npm-package-release/pull/6): Reconcile matching npm, Git, and hosted-release outputs and preserve immutable prepublication checkpoints through an explicit prepare/upload/complete handoff - [@dblock](https://github.com/dblock).
 - [#7](https://github.com/dblock/npm-package-release/pull/7): Add opt-in semantic releases with replaceable history, Conventional Commits analysis, version selection, generated notes, and immutable decisions without reanalysis - [@dblock](https://github.com/dblock).
 - [#8](https://github.com/dblock/npm-package-release/pull/8): Add a tested self-release configuration with installed SDK/CLI validation and a concrete, separately authorized first-publication procedure - [@dblock](https://github.com/dblock).
+- [#9](https://github.com/dblock/npm-package-release/pull/9): Share release service defaults and preparation sequences without changing workflow contracts or recovery checks - [@dblock](https://github.com/dblock).
 - Your contribution here.

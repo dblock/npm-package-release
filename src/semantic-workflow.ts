@@ -1,11 +1,11 @@
 import process from "node:process";
 import { command } from "./command.js";
 import { Workflow } from "./workflow.js";
-import { finishRelease, preparationObserver } from "./release.js";
+import { checkpointRelease, finishRelease, preparationObserver } from "./release.js";
 import { snapshot } from "./services.js";
 import { GitHistory, SemanticRelease, semanticPlan } from "./semantic.js";
 import {
-  InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, CheckpointRelease,
+  InitializeRelease, PrepareRelease,
   RestoreRelease, ReleaseRuntime, ReleaseObserver, scopedCommand,
 } from "./steps.js";
 import type { Step } from "./workflow.js";
@@ -98,15 +98,11 @@ export class SemanticReleaseWorkflow implements Step<ReleaseOptions, ReleaseStat
     config = Object.freeze({ ...config });
     this.config = config;
     const nextDevelopment = config.nextDevelopment ?? false;
-    this.preparation = Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider)
+    this.preparation = checkpointRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider)
       .then(new AnalyzeSemanticRelease(config, services))
       .then(new InitializeSemanticRelease(config, services))
       .then(new PrepareRelease())
-      .then(new ValidateSemanticDecision())
-      .then(new ValidateRelease())
-      .then(new CommitRelease())
-      .then(new BuildArtifact())
-      .then(new CheckpointRelease());
+      .then(new ValidateSemanticDecision()));
     this.workflow = finishRelease(this.preparation, nextDevelopment);
     this.completion = finishRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), provider)
       .then(new RestoreRelease({ ...config, changelog: null }, services, { nextDevelopment })), nextDevelopment);

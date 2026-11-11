@@ -14,7 +14,7 @@ import {
   RegistryVisibility, snapshot, verificationOptions,
 } from "./services.js";
 import type {
-  Artifact, Command, Environment, HookContext, Log, ReleaseConfig, ReleaseOptions, ReleaseServices, ReleaseState,
+  Artifact, Command, Environment, HookContext, Log, PackageManifest, ReleaseConfig, ReleaseOptions, ReleaseServices, ReleaseState,
 } from "./contracts.js";
 import type { Step, StepEvent, WorkflowObserver } from "./workflow.js";
 
@@ -119,6 +119,25 @@ function validateConfig(config: ReleaseConfig): void {
   }
 }
 
+function releaseHost(config: ReleaseConfig, run: Command, manifest: PackageManifest, overrides: Partial<ReleaseServices>) {
+  const repository = config.repository || manifest.repository?.url?.replace(/^git\+/u, "").match(
+    /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/u,
+  )?.[1];
+  return overrides.host !== undefined ? overrides.host :
+    config.github === false ? null : new GitHubReleaseHost(run, repository || "");
+}
+
+function releaseServices(config: ReleaseConfig, cwd: string, overrides: Partial<ReleaseServices>,
+  core: Pick<ReleaseServices, "repository" | "project" | "publisher" | "versions" | "store" | "host">): ReleaseServices {
+  return Object.freeze({
+    ...core,
+    validator: overrides.validator || new HookValidator(config),
+    changelog: overrides.changelog !== undefined ? overrides.changelog :
+      config.changelog ? new MarkdownChangelog(resolve(cwd, config.changelog.path || "CHANGELOG.md"), config.changelog) : null,
+    verifier: overrides.verifier || new RegistryVisibility(core.publisher),
+  });
+}
+
 export class InitializeRelease implements Step<ReleaseOptions, InitializedRelease> {
   readonly id = "initialize";
   constructor(readonly config: ReleaseConfig, readonly services: Partial<ReleaseServices> = {}) {}
@@ -148,11 +167,7 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     const manifest = await project.read();
     const versions = this.services.versions || new NumericPatchVersions();
     const { version, nextVersion } = versions.select(manifest.version, options.version);
-    const hostedRepository = config.repository || manifest.repository?.url?.replace(/^git\+/u, "").match(
-      /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/u,
-    )?.[1];
-    const host = this.services.host !== undefined ? this.services.host :
-      config.github === false ? null : new GitHubReleaseHost(execute, hostedRepository || "");
+    const host = releaseHost(config, execute, manifest, this.services);
     await repository.missingTag(version);
     await publisher.available(manifest.name, version);
     const store = this.services.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, options.artifacts));
@@ -162,12 +177,8 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
       verificationOptions: verification, phase: "started",
     });
     await store.initialize(state);
-    const services: ReleaseServices = Object.freeze({
+    const services = releaseServices(config, cwd, this.services, {
       repository, project, publisher, versions, store, host,
-      validator: this.services.validator || new HookValidator(config),
-      changelog: this.services.changelog !== undefined ? this.services.changelog :
-        config.changelog ? new MarkdownChangelog(resolve(cwd, config.changelog.path || "CHANGELOG.md"), config.changelog) : null,
-      verifier: this.services.verifier || new RegistryVisibility(publisher),
     });
     const runtime = new ReleaseRuntime(config, cwd, run, log, env, services, state, provider);
     return Object.freeze({ kind: "initialized", runtime, state, release: runtime.description() });
@@ -295,19 +306,11 @@ export class RestoreRelease implements Step<ReleaseOptions, BuiltRelease> {
     if (manifest.name !== release.name || ![release.version, release.nextVersion].includes(manifest.version)) {
       throw new Error("Checkout package differs from release checkpoint.");
     }
-    const hostedRepository = this.config.repository || manifest.repository?.url?.replace(/^git\+/u, "").match(
-      /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/u,
-    )?.[1];
     const publisher = this.overrides.publisher || npm;
-    const services: ReleaseServices = Object.freeze({
+    const services = releaseServices(this.config, cwd, this.overrides, {
       repository, project, publisher, store,
-      host: this.overrides.host !== undefined ? this.overrides.host :
-        this.config.github === false ? null : new GitHubReleaseHost(scoped, hostedRepository || ""),
-      changelog: this.overrides.changelog !== undefined ? this.overrides.changelog :
-        this.config.changelog ? new MarkdownChangelog(resolve(cwd, this.config.changelog.path || "CHANGELOG.md"), this.config.changelog) : null,
+      host: releaseHost(this.config, scoped, manifest, this.overrides),
       versions: this.overrides.versions || new NumericPatchVersions(),
-      validator: this.overrides.validator || new HookValidator(this.config),
-      verifier: this.overrides.verifier || new RegistryVisibility(publisher),
     });
     const runtime = new ReleaseRuntime(this.config, cwd, run, log, env, services, state, provider);
     await store.save(state);
@@ -323,9 +326,9 @@ export class PublishArtifact implements Step<BuiltRelease, PublishedRelease> {
     await project.intact(store.directory, state);
     await runtime.report(state, "publishing");
     await publisher.publish(join(store.directory, state.artifact.filename));
-    await runtime.report(state, "published");
+    const published = await runtime.report(state, "published");
     await project.intact(store.directory, state);
-    return Object.freeze({ ...input, kind: "published", state: snapshot({ ...state, phase: "published" }) });
+    return Object.freeze({ ...input, kind: "published", state: published });
   }
 }
 
