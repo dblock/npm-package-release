@@ -20,4 +20,5 @@
 - [#18](https://github.com/dblock/npm-package-release/pull/18): Overload Markdown section replacement with optional literal or regular-expression substitutions while preserving surrounding content - [@dblock](https://github.com/dblock).
 - [#19](https://github.com/dblock/npm-package-release/pull/19): Copy whole fixture projects by default, including hidden files, with optional glob strings or exact file lists and Git metadata/alias protection - [@dblock](https://github.com/dblock).
 - [#20](https://github.com/dblock/npm-package-release/pull/20): Follow ruby-gem-release's independently idempotent operations, remove checkpoint restoration and complete APIs, and preserve upload-gated reproducible artifacts with invocation-local semantic analysis - [@dblock](https://github.com/dblock).
+- [#21](https://github.com/dblock/npm-package-release/pull/21): Update README and documentation package/Actions pins to the published version during self-release development preparation - [@dblock](https://github.com/dblock).
 - Your contribution here.

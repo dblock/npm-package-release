@@ -48,6 +48,8 @@ The caller forwards optional `version` and `timezone` (UTC) inputs to `./.github
 
 Preparation validates tests/lint and the actual installed archive, then uploads recovery artifacts including hidden files before publication is allowed. Release independently repeats preparation using captured source/date/version inputs, requires an identical archive, publishes it, atomically pushes the release commit/tag, verifies remote refs, creates the GitHub Release, validates/pushes the next development iteration, and verifies the explicit published version and retained archive. The final artifact upload runs even after failure. Both uploads retain their files for 30 days; preserve them elsewhere before expiry when investigating an incomplete release.
 
+The root configuration updates this package's installation, action, and reusable-workflow pins in README and `docs/**/*.md` during next-development preparation. Pins use the version just released, never the unreleased development version. Other packages/actions, prerelease references, examples, and non-Markdown files are unchanged; original line endings and surrounding content are preserved.
+
 Local tests run the workflow's actual dependency-install, TypeScript-build, prepare, release, and verify commands against an isolated SDK checkout and Git remote. They copy the root release configuration unchanged, simulate only registry/hosting operations, retain artifacts before publication, and verify matching rebuilt bytes. They do not prove live OIDC, provenance, or Actions uploads.
 
 ## Verification and Recovery

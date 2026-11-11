@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { cp, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL, URL } from "node:url";
 import { command } from "../../dist/command.js";
@@ -23,6 +23,17 @@ export async function selfReleaseFixture(t, packageRoot, buildFromSource = false
   }
   if (buildFromSource) await cp(join(packageRoot, "tsconfig.json"), join(fixture.cwd, "tsconfig.json"));
   await cp(fileURLToPath(new URL("../../npr.config.js", import.meta.url)), join(fixture.cwd, "npr.config.js"));
+  await cp(join(packageRoot, "README.md"), join(fixture.cwd, "README.md"));
+  await cp(join(packageRoot, "docs"), join(fixture.cwd, "docs"), { recursive: true });
+  const pins = "Package: npm-package-release@0.0.7\r\nAction: dblock/npm-package-release@v0.0.7\r\n" +
+    "Workflow: dblock/npm-package-release/.github/workflows/release.yml@v0.0.7\r\n" +
+    "Other: another/action@v0.0.7 @other/npm-package-release@0.0.7 other-npm-package-release@0.0.7\r\n" +
+    "Prerelease: npm-package-release@0.0.7-beta.1 dblock/npm-package-release@v0.0.7-beta.1\r\n";
+  await mkdir(join(fixture.cwd, "docs/nested"), { recursive: true });
+  await mkdir(join(fixture.cwd, "examples"), { recursive: true });
+  for (const path of ["docs/pins.md", "docs/nested/pins.md", "docs/pins.txt", "examples/pins.md"]) {
+    await writeFile(join(fixture.cwd, path), pins);
+  }
   await writeFile(join(fixture.cwd, ".gitignore"), `node_modules/\n${buildFromSource ? "dist/\n" : ""}`);
   await writeFile(join(fixture.cwd, "test.js"), `
 import assert from "node:assert/strict";
@@ -55,6 +66,24 @@ export async function checkSelfRelease(t, packageRoot, configuredWorkflow) {
   assert.equal(fixture.events.filter((event) => event === "npm pack").length, 1);
   assert.equal(await fixture.git("status", "--porcelain"), "");
   assert.equal((await fixture.git("rev-parse", "v3.2.1")).trim(), result.releaseCommit);
+  for (const path of ["README.md", "docs/usage.md"]) {
+    assert.match(await fixture.git("show", `v3.2.1:${path}`), /npm-package-release@0\.1\.0/u);
+    assert.match(await fixture.git("show", `master:${path}`), /npm-package-release@3\.2\.1/u);
+    assert.doesNotMatch(await readFile(join(fixture.cwd, path), "utf8"), /npm-package-release@3\.2\.2/u);
+  }
+  for (const path of ["docs/pins.md", "docs/nested/pins.md"]) {
+    const original = await fixture.git("show", `v3.2.1:${path}`);
+    const expected = original
+      .replace("Package: npm-package-release@0.0.7", "Package: npm-package-release@3.2.1")
+      .replace("Action: dblock/npm-package-release@v0.0.7", "Action: dblock/npm-package-release@v3.2.1")
+      .replace("Workflow: dblock/npm-package-release/.github/workflows/release.yml@v0.0.7",
+        "Workflow: dblock/npm-package-release/.github/workflows/release.yml@v3.2.1");
+    assert.equal(await readFile(join(fixture.cwd, path), "utf8"), expected);
+    assert.equal(await fixture.git("show", `master:${path}`), expected);
+  }
+  for (const path of ["docs/pins.txt", "examples/pins.md"]) {
+    assert.equal(await readFile(join(fixture.cwd, path), "utf8"), await fixture.git("show", `v3.2.1:${path}`));
+  }
   for (const file of ["package.json", "package-lock.json"]) {
     assert.equal(JSON.parse(await readFile(join(fixture.cwd, file), "utf8")).version, "3.2.2");
   }
