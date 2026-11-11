@@ -108,6 +108,7 @@ if (args[0] === "api") {
     const env = {
       ...fixture.env,
       PATH: bin + delimiter + process.env.PATH,
+      ...(selfRelease ? { npm_config_cache: join(fixture.directory, "npm-cache") } : {}),
       npm_config_script_shell: shell,
       NPR_CONFIG: "npr.config.js", NPR_VERSION: semantic ? "" : releasedVersion, NPR_TIMEZONE: "America/New_York",
       NPR_ARTIFACTS: artifacts, RUNNER_TEMP: fixture.directory, NPR_DEFAULT_BRANCH: "master",

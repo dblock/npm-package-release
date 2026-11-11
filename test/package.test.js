@@ -1,10 +1,27 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import process from "node:process";
 import test from "node:test";
 import { NpmPackage, record } from "../dist/package.js";
 import { command } from "../dist/command.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
+
+test("commands isolate inherited npm-exec lookup flags without discarding other npm settings", async () => {
+  const output = await command(process.execPath, ["--input-type=module", "--eval", `
+import process from "node:process";
+console.log(JSON.stringify({
+  offline: process.env.npm_config_offline,
+  call: process.env.npm_config_call,
+  package: process.env.npm_config_package,
+  cache: process.env.npm_config_cache,
+}));
+`], { env: {
+    npm_config_offline: "true", npm_config_call: "npr prepare",
+    npm_config_package: "npm-package-release", npm_config_cache: "retained-cache",
+  } });
+  assert.deepEqual(JSON.parse(output), { cache: "retained-cache" });
+});
 
 test("npm metadata accepts actual npm 11/12 shapes and rejects ambiguous or malformed records", () => {
   for (const value of [
