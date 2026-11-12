@@ -6,7 +6,7 @@
 
 **Release your npm package from GitHub Actions without maintaining custom release scripts or storing an npm publish token.**
 
-One dispatch updates the changelog, tests and publishes the package, creates its GitHub Release, and prepares the next development iteration. Inspired by [ruby-gem-release](https://github.com/dblock/ruby-gem-release), with class-based, strongly typed workflow composition.
+Implements [Releases as Code](https://code.dblock.org/2026/11/12/releases-as-code.html) for JavaScript packages. Release from GitHub Actions, test your package and run its lint checks, publish to npm, optionally update the changelog, create a Git tag and GitHub Release, and prepare the next development iteration. Compose workflows from classes with strong types. See [rust-crate-release](https://github.com/dblock/rust-crate-release) and [ruby-gem-release](https://github.com/dblock/ruby-gem-release) for similar projects in the Rust and Ruby ecosystems.
 
 ## Installation
 
