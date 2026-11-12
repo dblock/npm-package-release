@@ -2,8 +2,7 @@
   <title id="title">npm Package Release</title>
   <desc id="description">A red package box with an upward release arrow.</desc>
   <g fill="#cb3837">
-    <path id="package" d="M96 224h320v208H96z"/>
+    <path id="package" d="M96 224h144v64h32v-64h144v208H96z"/>
     <path id="arrow" d="M256 64l96 96h-64v48h-64v-48h-64z"/>
   </g>
-  <path id="tape" fill="#fff" d="M240 224h32v64h-32z"/>
 </svg>
