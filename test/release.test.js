@@ -153,11 +153,20 @@ test("failed next-development validation preserves the published release without
     ...fixture.config,
     validator: new HookValidator({ validate: async ({ phase, run }) => {
       await run("npm", ["test"]);
-      if (phase === "next") throw new Error("Development validation failed");
+      if (phase === "next") {
+        const state = await fixture.state();
+        assert.equal(state.phase, "hosted");
+        assert.equal(state.activeStep, "next");
+        throw new Error("Development validation failed");
+      }
     } }),
   }), fixture), /Development validation failed/u);
   const state = await fixture.state();
   assert.equal(state.phase, "hosted");
+  assert.equal(state.activeStep, "next");
+  assert.equal(state.failedStep, "next");
+  assert.equal(state.verification, "failed");
+  assert.ok(fixture.events.some((event) => event.includes("failed step next; last phase hosted")));
   assert.equal(fixture.published.length, 1);
   assert.equal((await fixture.git("ls-remote", "origin", "refs/heads/master")).split("\t")[0], state.releaseCommit);
   assert.equal(JSON.parse(await readFile(join(fixture.cwd, "package.json"), "utf8")).version, "0.1.1");
