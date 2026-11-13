@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (Next)
+## 0.2.0 (2026/11/13)
 
 - [#27](https://github.com/dblock/npm-package-release/pull/27): Validate self-release documentation against its captured source instead of a fixed historical version and finish next-development metadata after the verified 0.1.1 publication - [@dblock](https://github.com/dblock).
 - [#28](https://github.com/dblock/npm-package-release/pull/28): Make the logo's packing-tape cutout transparent in both SVG and PNG assets - [@dblock](https://github.com/dblock).
@@ -10,7 +10,6 @@
 - [#33](https://github.com/dblock/npm-package-release/pull/33): Extract date selection, repository preflight, and captured-input transport from release initialization without changing side-effect ordering - [@dblock](https://github.com/dblock).
 - [#34](https://github.com/dblock/npm-package-release/pull/34): Reuse parsed Markdown and heading boundaries for unchanged changelog source while preserving source offsets and line endings - [@dblock](https://github.com/dblock).
 - [#36](https://github.com/dblock/npm-package-release/pull/36): Adopt environment-specific already-tested PR claims while preserving default-branch CI, coverage uploads, and publication checks - [@dblock](https://github.com/dblock).
-- Your contribution here.
 
 ## 0.1.1 (2026/11/11)
 
