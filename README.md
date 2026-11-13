@@ -13,7 +13,7 @@ Implements [Releases as Code](https://code.dblock.org/2026/11/12/releases-as-cod
 Requires Node.js 22.14+ and npm 11.5.1+; the release workflow defaults to Node.js 26/npm 12.
 
 ```sh
-npm install --save-dev --save-exact npm-package-release@0.1.1
+npm install --save-dev --save-exact npm-package-release@0.2.0
 ```
 
 The CLI is `npr`, but do not install the unrelated npm package `npr`.
@@ -55,7 +55,7 @@ permissions:
 
 jobs:
   release:
-    uses: dblock/npm-package-release/.github/workflows/release.yml@v0.1.1
+    uses: dblock/npm-package-release/.github/workflows/release.yml@v0.2.0
     with:
       version: ${{ inputs.version }}
 ```

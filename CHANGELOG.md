@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 (Next)
+
+- Your contribution here.
+
 ## 0.2.0 (2026/11/13)
 
 - [#27](https://github.com/dblock/npm-package-release/pull/27): Validate self-release documentation against its captured source instead of a fixed historical version and finish next-development metadata after the verified 0.1.1 publication - [@dblock](https://github.com/dblock).
