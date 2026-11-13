@@ -34,6 +34,8 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   readonly preparation: Workflow<ReleaseOptions, BuiltRelease>;
 
   constructor(private readonly config: ReleaseConfig = {}) {
+    config = Object.freeze({ ...config });
+    this.config = config;
     this.preparation = prepareRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
       .then(new InitializeRelease(config))
       .then(new PrepareRelease()));

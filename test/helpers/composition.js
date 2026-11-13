@@ -13,6 +13,8 @@ export async function checkDefaultChangelog(t, api) {
   const config = { ...fixture.config };
   delete config.changelog;
   const workflow = new api.ReleaseWorkflow(config);
+  config.changelog = new api.IntrideaChangelog();
+  config.prepare = async () => { throw new Error("Caller mutation leaked into the workflow"); };
   const built = await workflow.prepare(fixture);
   assert.ok(built.runtime.services.changelog instanceof api.KeepAChangelog);
   assert.match(await readFile(path, "utf8"), /## \[0\.1\.0\] - \d{4}-\d{2}-\d{2}/u);
