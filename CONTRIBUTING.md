@@ -14,6 +14,40 @@ To test a retained artifact without repacking, use `PACKAGE_ARCHIVE=/absolute/pa
 
 `npm run lint` checks strict runtime types, positive/negative contract fixtures, TypeScript, JavaScript, YAML, Markdown source, embedded JavaScript, spelling, single-line paragraphs, and title-case Markdown headings and workflow/job/step display names. Preserve proper names, acronyms, expressions, and code identifiers. Fix spelling mistakes and keep reviewed vocabulary in `.spellcheck.txt` with the bundled English dictionary. Validate workflow syntax with `actionlint .github/workflows/*.yml examples/*.yml` when changing workflow interfaces; this is separate from the YAML-aware display-name checker.
 
+## Local Check Claims
+
+[already-tested](https://github.com/dblock/already-tested) can skip matching PR checks after the same complete check ran locally. CI still starts each required job, but a verified claim skips its setup, dependency installation, and check steps. Missing/stale claims or verifier failures run the normal steps. Editing the PR description reruns verification. Every `master` push runs full CI; the Linux Node 26 coverage/Coveralls lane and release workflows are never skipped.
+
+Install the same released CLI version as the Actions gate:
+
+```sh
+curl -fsSL https://github.com/dblock/already-tested/releases/download/v0.1.1/install.sh | sh -s -- --version v0.1.1
+export PATH="$HOME/.local/bin:$PATH"
+already-tested --version
+```
+
+Use the [Windows installer](https://github.com/dblock/already-tested/releases/download/v0.1.1/install.ps1) with `-Version v0.1.1` for Windows checks. Keep CLI and Action versions together when updating them.
+
+| Workflow | Check ID | Complete Local Check |
+| --- | --- | --- |
+| `.github/workflows/test.yml` | `test-ubuntu-latest-X64-node-22.14.0`, `test-ubuntu-latest-X64-node-24`, `test-windows-latest-X64-node-26`, or `test-macos-latest-ARM64-node-26` | `npm test` after the workflow's Node 26 dependency setup, then the selected test Node version. |
+| `.github/workflows/lint.yml` | `lint-ubuntu-latest-X64-node-26` | `npm run lint` with the workflow's Node 26 setup. |
+| `.github/workflows/package.yml` | `package-ubuntu-latest-X64-node-22.14.0-npm-11` or `package-ubuntu-latest-X64-node-26-npm-12` | The entire Package job: dependency setup, selected Node/npm, unset and empty `PACKAGE_ARCHIVE` runs, `npm pack`, then validation of that retained archive. |
+
+IDs include the actual `runner.arch`; replace the example architecture if the runner changes. Match the CI runner's OS version, CPU architecture, Node/npm versions, and setup, not just its check name. A macOS run cannot justify Linux/Windows claims. A single `npm run test:package` does not justify the whole Package job. Keep claims scoped to one actually tested environment; do not use blanket claims or file filters.
+
+After running the complete matching check, commit all tested inputs and leave the tracked working tree clean. For example, only after reproducing the macOS ARM64 Node 26 job:
+
+```sh
+already-tested claim \
+  --workflow .github/workflows/test.yml \
+  --check test-macos-latest-ARM64-node-26 \
+  --command 'npm test' \
+  --environment '<actual matching macOS, ARM64, Node and npm versions>'
+```
+
+Paste the entire expandable output into the PR description without changing its hidden claim. After tracked source or workflow edits, retest, commit, and replace the claim. Claims bind all tracked files and the executing workflow, but do not prove execution: anyone who can edit a PR description can forge one. Preserve independent default-branch CI and never claim checks or environments you did not test.
+
 ## Tests
 
 Focused unit/release tests live in `test/`; packed consumers live in `test/integration/` and share CLI assertions and real release fixtures in `test/helpers/`. Source and installed CLI checks verify output channels, unsupported commands, and incompatible flags. Release fixtures run real Git remotes, npm tests/lint, archive construction, and strict-engine consumer installation while intercepting only registry lookup/publication and GitHub Release creation. The packed consumer runs the installed library's release sequence and, on Unix, the actual release CLI command from each YAML interface with isolated npm/GitHub publication shims. This Bash integration is not run on Windows; cross-platform unit/API consumers still run there. Workflow checker tests cover valid and invalid YAML display names without treating arbitrary `name` keys as display names.

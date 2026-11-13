@@ -72,6 +72,8 @@ Persist phases, active/failing steps, immutable release identity, commit refs, a
 
 Consumers require Node.js 22.14+, 24, or 26+; development uses Node.js 26/npm 12. Tooling requirements are separate from strict packed-consumer engines. npm 11/12 pack/view JSON shapes differ; accept only one unambiguous record and exercise both versions in package CI.
 
+Test, Lint, and Package PR jobs use the released `already-tested` gate immediately after depth-2 checkout with persisted credentials disabled. Claims cover all tracked files and the executing workflow, with distinct workflow/OS/CPU/Node/npm check identities. Matching claims skip only conditioned setup/install/check steps, retaining required job names; missing/stale claims or verification failures run normal CI. Description edits rerun the gates. Pushes to `master`, Linux Node 26 coverage/Coveralls, and release workflows remain unconditional. Claims are trusted statements, not execution evidence; see [Local Check Claims](CONTRIBUTING.md#local-check-claims).
+
 Release tests run the real implementation with isolated Git remotes, npm test/lint, actual tarballs, and installed consumers; intercept only registry lookup/publication and hosted-release creation. The packed consumer invokes the installed library's full release flow and, on Unix, the actual release CLI command read from both YAML interfaces, using isolated npm/GitHub publication shims. Source and installed executables share CLI assertions. These checks do not prove live OIDC authentication, provenance, or Actions artifact uploading, and PR CI never dispatches a publishing workflow.
 
 Keep this document focused on the current design and relevant rationale, removing superseded proposals rather than maintaining an implementation diary.
