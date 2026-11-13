@@ -7,6 +7,7 @@
 - [#30](https://github.com/dblock/npm-package-release/pull/30): Track active steps separately from completed phases and mark early next-development failures as failed verification without retrying publication - [@dblock](https://github.com/dblock).
 - [#31](https://github.com/dblock/npm-package-release/pull/31): Separate release and next-development Git commit operations from ordinary commit messages while preserving reconciliation guards - [@dblock](https://github.com/dblock).
 - [#32](https://github.com/dblock/npm-package-release/pull/32): Snapshot numeric workflow configuration at construction without freezing injected service instances - [@dblock](https://github.com/dblock).
+- [#33](https://github.com/dblock/npm-package-release/pull/33): Extract date selection, repository preflight, and captured-input transport from release initialization without changing side-effect ordering - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.1.1 (2026/11/11)

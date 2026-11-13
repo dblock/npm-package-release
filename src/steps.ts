@@ -15,7 +15,8 @@ import {
   RegistryVisibility, snapshot, verificationOptions,
 } from "./services.js";
 import type {
-  Artifact, Command, Environment, HookContext, Log, PackageManifest, ReleaseConfig, ReleaseOptions, ReleaseServices, ReleaseState,
+  Artifact, Command, Environment, HookContext, Log, PackageManifest, ReleaseConfig, ReleaseOptions, ReleaseRepository,
+  ReleaseServices, ReleaseState,
 } from "./contracts.js";
 import type { Step, StepEvent, WorkflowObserver } from "./workflow.js";
 
@@ -160,6 +161,40 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
   readonly id = "initialize";
   constructor(readonly config: ReleaseConfig = {}) {}
 
+  private date(timezone: string, env: Environment): string {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(new Date());
+    const date = env.NPR_RELEASE_DATE ||
+      ["year", "month", "day"].map((type) => parts.find((part) => part.type === type)!.value).join("-");
+    if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Invalid release date.");
+    return date;
+  }
+
+  private async repository(cwd: string, execute: Command, provider: ExecutionProvider, env: Environment): Promise<ReleaseRepository> {
+    if (await realpath(cwd) !== await realpath((await execute("git", ["rev-parse", "--show-toplevel"])).trim())) {
+      throw new Error("Run releases from the repository root.");
+    }
+    const repository = this.config.repository ||
+      new Git(execute, { branch: this.config.branch || provider.defaultBranch, remote: this.config.remote });
+    await repository.initialize(env.NPR_SOURCE_COMMIT);
+    provider.validateReleaseBranch(repository.branch);
+    return repository;
+  }
+
+  private async capture(execute: Command, provider: ExecutionProvider, env: Environment,
+    source: string, manifestVersion: string, date: string) {
+    const epoch = env.SOURCE_DATE_EPOCH || (await execute("git", ["show", "-s", "--format=%ct", source])).trim();
+    if (!/^\d+$/u.test(epoch)) throw new Error("Invalid source timestamp.");
+    const previousVersion = numericVersion(env.NPR_MANIFEST_VERSION || manifestVersion);
+    const inputs = {
+      NPR_SOURCE_COMMIT: source, NPR_MANIFEST_VERSION: previousVersion,
+      NPR_RELEASE_DATE: date, SOURCE_DATE_EPOCH: epoch,
+    };
+    const captured = await provider.capture?.(inputs);
+    return { env: Object.freeze({ ...env, ...inputs, ...captured }), previousVersion };
+  }
+
   async run(options: ReleaseOptions, execution?: ExecutionContext, injectedProvider?: ExecutionProvider): Promise<InitializedRelease> {
     const config = this.config;
     validateConfig(config);
@@ -167,35 +202,18 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     let env = Object.freeze({ ...(options.env || process.env) });
     const provider = options.provider || injectedProvider || config.provider || currentExecutionProvider(env);
     const timezone = config.timezone || provider.timezone || "UTC";
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-    }).formatToParts(new Date());
-    const date = env.NPR_RELEASE_DATE ||
-      ["year", "month", "day"].map((type) => parts.find((part) => part.type === type)!.value).join("-");
-    if (!/^\d{4}-\d{2}-\d{2}$/u.test(date)) throw new Error("Invalid release date.");
+    const date = this.date(timezone, env);
     const verification = verificationOptions(config.verifier?.options);
     let execute = scopedCommand(cwd, run, timezone, "release", env);
-    if (await realpath(cwd) !== await realpath((await execute("git", ["rev-parse", "--show-toplevel"])).trim())) {
-      throw new Error("Run releases from the repository root.");
-    }
-    const repository = config.repository || new Git(execute, { branch: config.branch || provider.defaultBranch, remote: config.remote });
-    await repository.initialize(env.NPR_SOURCE_COMMIT);
-    provider.validateReleaseBranch(repository.branch);
+    const repository = await this.repository(cwd, execute, provider, env);
     const project = config.project || new NpmPackage(cwd, execute);
     const manifest = await project.read();
     const versions = config.versions || new NumericPatchVersions();
     const { version, nextVersion } = versions.select(manifest.version, options.version);
     await repository.current(repository.initialCommit, version);
-    const epoch = env.SOURCE_DATE_EPOCH ||
-      (await execute("git", ["show", "-s", "--format=%ct", repository.initialCommit])).trim();
-    if (!/^\d+$/u.test(epoch)) throw new Error("Invalid source timestamp.");
-    const previousVersion = numericVersion(env.NPR_MANIFEST_VERSION || manifest.version);
-    const inputs = {
-      NPR_SOURCE_COMMIT: repository.initialCommit, NPR_MANIFEST_VERSION: previousVersion,
-      NPR_RELEASE_DATE: date, SOURCE_DATE_EPOCH: epoch,
-    };
-    const captured = await provider.capture?.(inputs);
-    env = Object.freeze({ ...env, ...inputs, ...captured });
+    const captured = await this.capture(execute, provider, env, repository.initialCommit, manifest.version, date);
+    env = captured.env;
+    const { previousVersion } = captured;
     execute = scopedCommand(cwd, run, timezone, "release", env);
     const npm = new NpmPackage(cwd, execute);
     const publisher = config.publisher || npm;
