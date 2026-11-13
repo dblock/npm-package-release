@@ -9,23 +9,36 @@ export function markdownDocument(source: string) {
 }
 
 export function markdownHeadings(source: string) {
-  return markdownDocument(source).children.filter((node) => node.type === "heading").map((node) => ({
-    node,
-    text: source.slice(node.position!.start.offset!, node.position!.end.offset!)
-      .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "").replace(/[ \t]+#+[ \t]*$/u, ""),
-  }));
+  return new ParsedMarkdown(source).headings;
 }
 
 export function markdownSection(source: string, pattern: RegExp, exactLine = false) {
-  const all = markdownHeadings(source);
-  const matches = all.filter(({ node, text }) => pattern.test(exactLine
-    ? source.slice(node.position!.start.offset!, node.position!.end.offset!) : text));
-  if (matches.length !== 1) throw new Error("Expected exactly one matching Markdown heading.");
-  const { node, text } = matches[0];
-  const end = all.find(({ node: other }) =>
-    other.position!.start.offset! > node.position!.start.offset! && other.depth <= node.depth,
-  )?.node.position!.start.offset ?? source.length;
-  return { node, text, start: node.position!.start.offset!, body: node.position!.end.offset!, end };
+  return new ParsedMarkdown(source).section(pattern, exactLine);
+}
+
+export class ParsedMarkdown {
+  readonly root;
+  readonly headings;
+
+  constructor(readonly source: string) {
+    this.root = markdownDocument(source);
+    this.headings = this.root.children.filter((node) => node.type === "heading").map((node) => ({
+      node,
+      text: source.slice(node.position!.start.offset!, node.position!.end.offset!)
+        .replace(/^[ \t]{0,3}#{1,6}[ \t]+/u, "").replace(/[ \t]+#+[ \t]*$/u, ""),
+    }));
+  }
+
+  section(pattern: RegExp, exactLine = false) {
+    const matches = this.headings.filter(({ node, text }) => pattern.test(exactLine
+      ? this.source.slice(node.position!.start.offset!, node.position!.end.offset!) : text));
+    if (matches.length !== 1) throw new Error("Expected exactly one matching Markdown heading.");
+    const { node, text } = matches[0];
+    const end = this.headings.find(({ node: other }) =>
+      other.position!.start.offset! > node.position!.start.offset! && other.depth <= node.depth,
+    )?.node.position!.start.offset ?? this.source.length;
+    return { node, text, start: node.position!.start.offset!, body: node.position!.end.offset!, end };
+  }
 }
 
 export function newline(source: string) {
