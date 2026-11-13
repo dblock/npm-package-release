@@ -1,6 +1,6 @@
 import { numericVersion } from "./command.js";
 import {
-  markdownDocument as document, markdownHeadings as headings, markdownSection as section, newline,
+  markdownDocument as document, markdownHeadings as headings, ParsedMarkdown, newline,
 } from "./markdown.js";
 import type { Nodes } from "mdast";
 import type { ChangelogFormat } from "./contracts.js";
@@ -41,9 +41,10 @@ export function generatedChangelog(source: string, { version, date, notes }:
   }
   const separator = newline(source);
   const pattern = new RegExp(`^## ${version.replaceAll(".", "\\.")}(?: |$)`, "u");
-  const all = headings(source);
+  const parsed = new ParsedMarkdown(source);
+  const all = parsed.headings;
   if (all.some(({ node }) => pattern.test(source.slice(node.position!.start.offset!, node.position!.end.offset!)))) {
-    const current = section(source, pattern, true);
+    const current = parsed.section(pattern, true);
     if (source.slice(current.body, current.end).replaceAll("\r\n", "\n").trim() !== notes.replaceAll("\r\n", "\n").trim()) {
       throw new Error("Existing generated release notes differ.");
     }
@@ -125,19 +126,20 @@ export function releaseChangelog(source: string, { format, version, date, ...opt
   if (!["intridea", "keep-a-changelog"].includes(format)) throw new Error("Unknown changelog format.");
   const intridea = format === "intridea";
   const template = changelogTemplate(format, options);
+  const parsed = new ParsedMarkdown(source);
   const released = new RegExp(intridea
     ? `^${version.replaceAll(".", "\\.")} \\(\\d{4}/\\d{2}/\\d{2}\\)$`
     : `^\\[${version.replaceAll(".", "\\.")}\\] - \\d{4}-\\d{2}-\\d{2}$`, "u");
-  if (headings(source).some(({ text }) => released.test(text))) {
-    const existing = section(source, released);
+  if (parsed.headings.some(({ text }) => released.test(text))) {
+    const existing = parsed.section(released);
     const notes = source.slice(existing.body, existing.end);
     if (!document(cleanNotes(notes, existing.node.depth, template, false)).children.some(hasNotes)) {
       throw new Error("Release notes must not be empty.");
     }
     return { source, notes: notes.trim() };
   }
-  const current = section(source, intridea ? /^\d+\.\d+\.\d+ \(Next\)$/u : /^\[Unreleased\]$/u);
-  if (headings(source).some(({ text }) =>
+  const current = parsed.section(intridea ? /^\d+\.\d+\.\d+ \(Next\)$/u : /^\[Unreleased\]$/u);
+  if (parsed.headings.some(({ text }) =>
     intridea ? text.startsWith(`${version} (`) && !text.endsWith("(Next)") : text.startsWith(`[${version}] - `),
   )) throw new Error("Release heading already exists.");
   const notes = cleanNotes(source.slice(current.body, current.end), current.node.depth, template, intridea);
@@ -157,19 +159,20 @@ export function nextChangelog(source: string, { format, version, releasedVersion
   const intridea = format === "intridea";
   if (!["intridea", "keep-a-changelog"].includes(format)) throw new Error("Unknown changelog format.");
   const template = changelogTemplate(format, options);
-  const current = section(source, new RegExp(intridea
+  const parsed = new ParsedMarkdown(source);
+  const current = parsed.section(new RegExp(intridea
     ? `^${releasedVersion.replaceAll(".", "\\.")} \\(\\d{4}/\\d{2}/\\d{2}\\)$`
     : `^\\[${releasedVersion.replaceAll(".", "\\.")}\\] - \\d{4}-\\d{2}-\\d{2}$`, "u"));
-  const pending = headings(source).filter(({ text }) => intridea ? text.endsWith(" (Next)") : text === "[Unreleased]");
+  const pending = parsed.headings.filter(({ text }) => intridea ? text.endsWith(" (Next)") : text === "[Unreleased]");
   if (pending.length) {
     const expected = intridea ? `${version} (Next)` : "[Unreleased]";
     if (pending.length === 1 && pending[0].text === expected &&
-      section(source, intridea ? /^\d+\.\d+\.\d+ \(Next\)$/u : /^\[Unreleased\]$/u).end === current.start) return source;
+      parsed.section(intridea ? /^\d+\.\d+\.\d+ \(Next\)$/u : /^\[Unreleased\]$/u).end === current.start) return source;
     throw new Error("Unreleased heading already exists with conflicting version or position.");
   }
   const newline = source.includes("\r\n") ? "\r\n" : "\n";
   const heading = `${"#".repeat(current.node.depth)} ${intridea ? `${version} (Next)` : "[Unreleased]"}`;
-  const categories = intridea ? headings(source).filter(({ node }) =>
+  const categories = intridea ? parsed.headings.filter(({ node }) =>
     node.depth === current.node.depth + 1 && node.position!.start.offset! >= current.body &&
     node.position!.start.offset! < current.end,
   ).map(({ node }) => source.slice(node.position!.start.offset!, node.position!.end.offset!)) :
