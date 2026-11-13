@@ -6,6 +6,7 @@
 - [#28](https://github.com/dblock/npm-package-release/pull/28): Make the logo's packing-tape cutout transparent in both SVG and PNG assets - [@dblock](https://github.com/dblock).
 - [#30](https://github.com/dblock/npm-package-release/pull/30): Track active steps separately from completed phases and mark early next-development failures as failed verification without retrying publication - [@dblock](https://github.com/dblock).
 - [#31](https://github.com/dblock/npm-package-release/pull/31): Separate release and next-development Git commit operations from ordinary commit messages while preserving reconciliation guards - [@dblock](https://github.com/dblock).
+- [#32](https://github.com/dblock/npm-package-release/pull/32): Snapshot numeric workflow configuration at construction without freezing injected service instances - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.1.1 (2026/11/11)

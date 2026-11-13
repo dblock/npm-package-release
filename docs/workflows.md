@@ -112,6 +112,8 @@ Custom workflows may add, replace, omit, or reorder compatible steps. For exampl
 
 Diagnostic state is read through the selected store. Built-in steps persist new snapshots; custom steps that change diagnostics must call `runtime.services.store.save` with a new state, or `runtime.report(state, phase)` to save and log it. Never interpret phase flags as a resume protocol or serialize service instances. Each operation reconciles actual outputs from the current checkout and inputs. Standalone `verify({ services })` accepts replacement service instances for retained custom releases; CLI verification uses the default npm/Git services. See [Recovery and Reconciliation](recovery.md).
 
+Both standard workflows capture a shallow-frozen configuration copy at construction; configure services and hooks before creating the workflow. Service instances remain mutable.
+
 ## Compatibility
 
 Configuration modules export workflow instances, not plain objects or service-selector descriptors. `release(workflow, options)` executes a class implementing `Step`; Actions additionally requires a `prepare` method. Custom repositories implement repeatable preparation and `nextIteration`, not bundle restoration. Missing/different hosted asset checksums fail rather than overwriting old assets. TypeScript configuration modules must be compiled to ESM before passing their path to `--config`; the CLI does not install a loader or compiler. Consumers can write JavaScript classes in `npr.config.js`.
