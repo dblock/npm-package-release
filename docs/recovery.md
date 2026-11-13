@@ -4,6 +4,8 @@
 
 Release operations follow ruby-gem-release: reconcile each output from the current checkout and supplied inputs. There is no checkpoint descriptor, bundle restoration command, or completion journal. `release.json` records diagnostics and supports read-only verification; its phase never grants permission to skip an operation.
 
+`phase` is the last persisted phase, not necessarily the running step. `activeStep` identifies the running step and clears on successful completion; a failure retains it alongside `failedStep` and `error`. For example, failed next-development validation keeps `phase: "hosted"`, records `activeStep: "next"`, and marks verification failed without republishing the already released archive.
+
 `npr prepare` validates release files, commits, builds and tests the actual archive, creates the local tag, and retains notes and a Git bundle without publishing or pushing. `npr release` independently repeats that preparation before publication:
 
 ```sh

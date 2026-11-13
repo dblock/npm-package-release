@@ -129,6 +129,7 @@ export async function releaseFixture(t, settings = {}) {
   const commit = async () => (await git("rev-parse", "HEAD")).trim();
   const assertReleased = async (result) => {
     assert.equal(result.verification, "verified");
+    assert.equal((await state()).activeStep, undefined);
     assert.equal(published.length, 1);
     assert.equal((await git("show", `v${result.version}:package.json`)).includes(`"version": "${result.version}"`), true);
     assert.equal(JSON.parse(await readFile(join(cwd, "package.json"), "utf8")).version, result.nextVersion);

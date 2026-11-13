@@ -64,7 +64,8 @@ export class ReleaseRuntime {
   }
 
   async report<State extends ReleaseState>(state: State, phase: string): Promise<Readonly<State>> {
-    const updated = snapshot({ ...state, phase });
+    const { activeStep } = await this.services.store.read();
+    const updated = snapshot({ ...state, phase, activeStep });
     await this.services.store.save(updated);
     this.log(`[npr] ${phase}: ${state.name}@${state.version}`);
     return updated;
@@ -92,7 +93,17 @@ export type NextRelease = ReleaseContext<"next", ArtifactState & { readonly next
 
 export class ReleaseObserver implements WorkflowObserver {
   async started({ id, input }: StepEvent): Promise<void> {
-    if (isReleaseContext(input)) input.runtime.log(`[npr] step ${id}`);
+    if (!isReleaseContext(input)) return;
+    const { runtime } = input;
+    await runtime.services.store.save({ ...await runtime.services.store.read(), activeStep: id });
+    runtime.log(`[npr] step ${id}`);
+  }
+
+  async completed({ input, output }: StepEvent & { readonly output: unknown }): Promise<void> {
+    const context = isReleaseContext(output) ? output : input;
+    if (!isReleaseContext(context)) return;
+    const { store } = context.runtime.services;
+    await store.save({ ...await store.read(), activeStep: undefined });
   }
 
   async failed({ id, input, output, error }: LifecycleFailure): Promise<void> {
@@ -102,11 +113,11 @@ export class ReleaseObserver implements WorkflowObserver {
     const state = await runtime.services.store.read();
     const failedHook = runtime.lifecycle?.details(error);
     await runtime.services.store.save({
-      ...state, error: error instanceof Error ? error.message : String(error), failedStep: id,
+      ...state, activeStep: id, error: error instanceof Error ? error.message : String(error), failedStep: id,
       ...(failedHook ? { failedHook } : {}),
-      ...(state.phase === "next" && state.verification !== "verified" ? { verification: "failed" } : {}),
+      ...(id === "next" && state.verification !== "verified" ? { verification: "failed" } : {}),
     });
-    runtime.log(`[npr] stopped at ${state.phase}; recovery artifacts: ${runtime.services.store.directory}`);
+    runtime.log(`[npr] failed step ${id}; last phase ${state.phase}; recovery artifacts: ${runtime.services.store.directory}`);
   }
 }
 
@@ -248,7 +259,7 @@ export class CommitRelease implements Step<ValidatedRelease, CommittedRelease> {
   async run(input: ValidatedRelease): Promise<CommittedRelease> {
     const { runtime, state } = input;
     const releaseCommit = await runtime.services.repository.commit(`Prepare release ${state.version}`, state.preparedTree);
-    const updated = snapshot({ ...state, releaseCommit });
+    const updated = snapshot({ ...state, releaseCommit, activeStep: this.id });
     await runtime.services.store.save(updated);
     return Object.freeze({ ...input, kind: "committed", state: updated });
   }
@@ -341,7 +352,7 @@ export class PrepareNextVersion implements Step<HostedRelease | PushedRelease, N
       await validator.validate(runtime.hook("next", execution));
       nextCommit = await repository.commit(`Prepare next development iteration, ${state.nextVersion}`, nextTree);
     }
-    const updated = snapshot({ ...state, nextCommit });
+    const updated = snapshot({ ...state, nextCommit, activeStep: this.id });
     await store.save(updated);
     await repository.bundle(join(store.directory, "next.bundle"), state.version);
     await repository.push(nextCommit);
@@ -373,7 +384,7 @@ export async function verifyRetained(
     await services.repository.verifyTag(state.version, state.releaseCommit);
     log(`[npr] verifying: ${state.name}@${state.version}`);
     const verification = await services.verifier.verify({ ...state, artifact: state.artifact }, state.verificationOptions, log);
-    state = snapshot({ ...state, verification });
+    state = snapshot({ ...state, verification, activeStep: undefined });
     await services.store.save(state);
     const message = verification === "verified" ? "verified" : "release could not be verified";
     log(`[npr] ${message}: ${state.name}@${state.version}`);

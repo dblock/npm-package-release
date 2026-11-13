@@ -47,6 +47,7 @@ export interface ReleaseState extends ReleaseIdentity {
   readonly initialCommit: string;
   readonly verificationOptions: VerificationOptions;
   readonly phase: string;
+  readonly activeStep?: string;
   readonly preparedTree?: string;
   readonly releaseCommit?: string;
   readonly artifact?: Artifact;

@@ -4,6 +4,7 @@
 
 - [#27](https://github.com/dblock/npm-package-release/pull/27): Validate self-release documentation against its captured source instead of a fixed historical version and finish next-development metadata after the verified 0.1.1 publication - [@dblock](https://github.com/dblock).
 - [#28](https://github.com/dblock/npm-package-release/pull/28): Make the logo's packing-tape cutout transparent in both SVG and PNG assets - [@dblock](https://github.com/dblock).
+- [#30](https://github.com/dblock/npm-package-release/pull/30): Track active steps separately from completed phases and mark early next-development failures as failed verification without retrying publication - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.1.1 (2026/11/11)
