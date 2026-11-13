@@ -107,6 +107,8 @@ export interface ReleaseRepository {
   stage(edits: () => Promise<void>): Promise<string>;
   unchanged(tree: string): Promise<void>;
   commit(message: string, tree: string): Promise<string>;
+  commitRelease(version: string, tree: string): Promise<string>;
+  commitNext(version: string, tree: string): Promise<string>;
   nextIteration(releaseCommit: string, nextVersion: string): Promise<{ readonly commit: string; readonly tree: string } | null>;
   tag(version: string, commit?: string): Promise<void>;
   bundle(path: string, version: string): Promise<void>;

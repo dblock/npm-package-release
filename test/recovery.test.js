@@ -9,6 +9,23 @@ import * as api from "../dist/index.js";
 import { command } from "../dist/command.js";
 import { releaseFixture } from "./helpers/release-fixture.js";
 
+test("named Git operations select reconciliation without interpreting ordinary commit messages", async (t) => {
+  const fixture = await releaseFixture(t);
+  const repository = new api.Git((program, args) => fixture.run(program, args, { cwd: fixture.cwd, env: fixture.env }));
+  await repository.initialize();
+  const initial = await fixture.commit();
+  await repository.tag("4.5.6", initial);
+  const tree = await repository.stage(() => writeFile(join(fixture.cwd, "README.md"), "Custom change\n"));
+  const custom = await repository.commit("Prepare release 4.5.6", tree);
+  assert.notEqual(custom, initial);
+  assert.equal((await fixture.git("rev-parse", "v4.5.6")).trim(), initial);
+  await assert.rejects(repository.commitRelease("4.5.6", tree), /refusing to rewind/u);
+  await repository.tag("7.8.9", custom);
+  assert.equal(await repository.commitRelease("7.8.9", tree), custom);
+  await assert.rejects(repository.commitRelease("bad", tree), /numeric/u);
+  await assert.rejects(repository.commitNext("bad", tree), /numeric/u);
+});
+
 test("current-checkout release operations reconcile failed and repeated publication without restoring diagnostics", async (t) => {
   let failPush = false;
   const fixture = await releaseFixture(t, {

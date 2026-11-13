@@ -258,7 +258,7 @@ export class CommitRelease implements Step<ValidatedRelease, CommittedRelease> {
   readonly id = "commit";
   async run(input: ValidatedRelease): Promise<CommittedRelease> {
     const { runtime, state } = input;
-    const releaseCommit = await runtime.services.repository.commit(`Prepare release ${state.version}`, state.preparedTree);
+    const releaseCommit = await runtime.services.repository.commitRelease(state.version, state.preparedTree);
     const updated = snapshot({ ...state, releaseCommit, activeStep: this.id });
     await runtime.services.store.save(updated);
     return Object.freeze({ ...input, kind: "committed", state: updated });
@@ -350,7 +350,7 @@ export class PrepareNextVersion implements Step<HostedRelease | PushedRelease, N
         await project.lockfile(await project.read());
       });
       await validator.validate(runtime.hook("next", execution));
-      nextCommit = await repository.commit(`Prepare next development iteration, ${state.nextVersion}`, nextTree);
+      nextCommit = await repository.commitNext(state.nextVersion, nextTree);
     }
     const updated = snapshot({ ...state, nextCommit, activeStep: this.id });
     await store.save(updated);

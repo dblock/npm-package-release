@@ -13,6 +13,18 @@ import type {
   LifecycleHook, LifecycleContext,
 } from "../../src/index.js";
 
+export async function commitContract(repository: ReleaseRepository, tree: string) {
+  await repository.commitRelease("0.1.2", tree);
+  await repository.commitNext("0.1.3", tree);
+  await repository.commit("Project change", tree);
+  // @ts-expect-error Release commits require a prepared tree.
+  await repository.commitRelease("0.1.2");
+  // @ts-expect-error Next-development versions must be strings.
+  await repository.commitNext(123, tree);
+  // @ts-expect-error Ordinary commits do not accept an intent argument.
+  await repository.commit("Project change", tree, { kind: "release", version: "0.1.2" });
+}
+
 class InspectArtifact implements Step<BuiltRelease, BuiltRelease> {
   readonly id = "inspect";
   async run(input: BuiltRelease, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<BuiltRelease> {

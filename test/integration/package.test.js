@@ -67,6 +67,7 @@ test("the actual tarball installs with strict engines and exposes its API and CL
     "package/README.md",
     "package/LICENSE",
     "package/DESIGN.md",
+    "package/UPGRADING.md",
   ]) {
     assert.ok(files.includes(file), `Missing packed file: ${file}`);
   }
@@ -106,6 +107,15 @@ test("the actual tarball installs with strict engines and exposes its API and CL
 import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection, GeneratedChangelog } from "npm-package-release";
 import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, LifecycleHook, LifecycleContext } from "npm-package-release";
 import { ReleaseTestProject, TestPublisher, TestReleaseHost } from "npm-package-release/testing";
+export async function commitContract(repository: import("npm-package-release").ReleaseRepository, tree: string) {
+  await repository.commitRelease("0.1.2", tree);
+  await repository.commitNext("0.1.3", tree);
+  await repository.commit("Project change", tree);
+  // @ts-expect-error Release commits require a prepared tree.
+  await repository.commitRelease("0.1.2");
+  // @ts-expect-error Next-development versions must be strings.
+  await repository.commitNext(123, tree);
+}
 export async function testProjectContracts() {
   const project = await ReleaseTestProject.create();
   new ReleaseWorkflow(project.services);
