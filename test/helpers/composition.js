@@ -105,11 +105,23 @@ export async function checkComposition(t, api) {
     }
   }
   const publisher = new ProjectPublisher();
+  class ProjectRepository extends api.Git {
+    async commitRelease(version, tree) {
+      fixture.events.push(`commit release ${version}`);
+      return super.commitRelease(version, tree);
+    }
+    async commitNext(version, tree) {
+      fixture.events.push(`commit next ${version}`);
+      return super.commitNext(version, tree);
+    }
+  }
+  const repository = new ProjectRepository((program, args, options) =>
+    fixture.run(program, args, { cwd: fixture.cwd, env: fixture.env, ...options }));
   const workflow = api.Workflow.start(new api.ReleaseObserver())
     .then(new api.InitializeRelease({
       ...fixture.config,
       changelog: new ProjectNotes(), versions: new NextMinor(),
-      validator: new ProjectChecks(), host: new ProjectHost(), publisher,
+      validator: new ProjectChecks(), host: new ProjectHost(), publisher, repository,
       verifier: new api.RegistryVisibility(publisher, { attempts: 3, delay: 0 }),
     }))
     .then(new api.PrepareRelease())
@@ -128,6 +140,8 @@ export async function checkComposition(t, api) {
   });
   assert.equal(result.verification, "verified");
   assert.equal(result.nextVersion, "0.3.0");
+  assert.ok(fixture.events.includes("commit release 0.2.0"));
+  assert.ok(fixture.events.includes("commit next 0.3.0"));
   assert.equal(fixture.published.length, 1);
   assert.equal(snapshots.length, 2);
   assert.equal(snapshots[0].steps.publish, undefined);

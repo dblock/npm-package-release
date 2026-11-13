@@ -100,6 +100,8 @@ export default new ReleaseWorkflow({ versions: new NextMinorVersion() });
 
 For TypeScript, implement `VersionPolicy`; use `Changelog`, `ReleaseHost`, or another public interface for other services. An explicitly supplied host replaces GitHub-specific construction, including GitHub repository inference. Publisher injection is independent of package building, and the default registry verifier uses that publisher. Existing npm-specific validation remains in `NpmPackage`; alternative behavior requires the corresponding custom classes, not merely a different URL.
 
+Repository adapters implement `commitRelease(version, tree)` and `commitNext(version, tree)` for release-specific reconciliation, alongside ordinary `commit(message, tree)`. `Git` generates standard messages inside the named operations; message text never selects the reconciliation path. All three operations reject files or index entries that differ from the prepared tree. See [Upgrading](../UPGRADING.md) for adapter migration and existing-output safeguards.
+
 ## Ordering, Safety, and Recovery
 
 The default workflow preserves clean-checkout, trusted-index, release identity, reproducible-build, strict-consumer, conflicting-output, archive-integrity, atomic-push, and recovery guarantees. It creates hosting and next-development metadata before bounded registry visibility checks. A timeout is unverified, not permission to republish.

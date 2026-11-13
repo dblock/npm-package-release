@@ -1,3 +1,4 @@
+import { numericVersion } from "./command.js";
 import type { Command, ReleaseRepository } from "./contracts.js";
 
 export class Git implements ReleaseRepository {
@@ -73,33 +74,45 @@ export class Git implements ReleaseRepository {
 
   async commit(message: string, tree: string) {
     await this.unchanged(tree);
-    const version = /^Prepare release (\d+\.\d+\.\d+)$/u.exec(message)?.[1];
-    let existing = version ? await this.existingRelease(version) : null;
-    if (!version && message.startsWith("Prepare next development iteration, ")) {
-      const head = (await this.run("rev-parse", "HEAD")).trim();
-      const remote = await this.remoteHead();
-      const next = (await this.run("rev-list", "--first-parent", "--reverse", `${head}..${remote}`)).trim().split(/\s+/u)[0];
-      if (next && (await this.run("rev-list", "--parents", "-n", "1", next)).trim() === `${next} ${head}` &&
-        (await this.run("log", "-1", "--format=%s", next)).trim() === message) existing = next;
-    }
-    if (existing) {
-      const head = (await this.run("rev-parse", "HEAD")).trim();
-      if (version && head !== existing && !await this.ancestor(head, existing)) {
-        throw new Error("Checkout advanced beyond the matching release; refusing to rewind it.");
-      }
-      if ((await this.run("rev-parse", `${existing}^{tree}`)).trim() !== tree) {
-        throw new Error("Existing release or development tree differs from the intended changes.");
-      }
-      await this.run("update-ref", "HEAD", existing, head);
-      await this.clean();
-      return existing;
-    }
-    if (version && (await this.run("rev-parse", "HEAD")).trim() !== this.initialCommit) {
-      throw new Error("Checkout advanced beyond the captured release source.");
-    }
     if ((await this.run("diff", "--cached", "--name-only")).trim()) await this.run("commit", "-m", message);
     await this.clean();
     return (await this.run("rev-parse", "HEAD")).trim();
+  }
+
+  async commitRelease(version: string, tree: string) {
+    numericVersion(version);
+    await this.unchanged(tree);
+    const existing = await this.existingRelease(version);
+    const head = (await this.run("rev-parse", "HEAD")).trim();
+    if (existing) {
+      if (head !== existing && !await this.ancestor(head, existing)) {
+        throw new Error("Checkout advanced beyond the matching release; refusing to rewind it.");
+      }
+      return this.reuseCommit(existing, tree, head);
+    }
+    if (head !== this.initialCommit) throw new Error("Checkout advanced beyond the captured release source.");
+    return this.commit(`Prepare release ${version}`, tree);
+  }
+
+  async commitNext(version: string, tree: string) {
+    numericVersion(version);
+    await this.unchanged(tree);
+    const message = `Prepare next development iteration, ${version}`;
+    const head = (await this.run("rev-parse", "HEAD")).trim();
+    const remote = await this.remoteHead();
+    const next = (await this.run("rev-list", "--first-parent", "--reverse", `${head}..${remote}`)).trim().split(/\s+/u)[0];
+    if (next && (await this.run("rev-list", "--parents", "-n", "1", next)).trim() === `${next} ${head}` &&
+      (await this.run("log", "-1", "--format=%s", next)).trim() === message) return this.reuseCommit(next, tree, head);
+    return this.commit(message, tree);
+  }
+
+  private async reuseCommit(commit: string, tree: string, head: string) {
+    if ((await this.run("rev-parse", `${commit}^{tree}`)).trim() !== tree) {
+      throw new Error("Existing release or development tree differs from the intended changes.");
+    }
+    await this.run("update-ref", "HEAD", commit, head);
+    await this.clean();
+    return commit;
   }
 
   async nextIteration(releaseCommit: string, nextVersion: string): Promise<{ commit: string; tree: string } | null> {

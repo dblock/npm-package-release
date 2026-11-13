@@ -1,6 +1,6 @@
 {
   "name": "npm-package-release",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Composable, strongly typed npm release workflows with class-based steps and GitHub Actions interfaces.",
   "type": "module",
   "exports": {
@@ -26,6 +26,7 @@
     "CONTRIBUTING.md",
     "DESIGN.md",
     "RELEASING.md",
+    "UPGRADING.md",
     "docs/",
     "examples/"
   ],

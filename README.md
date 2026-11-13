@@ -94,7 +94,7 @@ See [Detailed Usage](docs/usage.md) for CLI/API commands and defaults; [Changelo
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Changelog Templates](docs/changelogs.md), [Updating Markdown Sections](docs/markdown.md), [Testing Custom Workflows](docs/testing.md), the [Lifecycle Hook Example](examples/lifecycle-hooks/README.md), [Lifecycle Hooks](docs/hooks.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Recovery and Reconciliation](docs/recovery.md), and [Semantic Releases](docs/semantic.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [DESIGN.md](DESIGN.md), [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md), [UPGRADING.md](UPGRADING.md), [AGENTS.md](AGENTS.md), [Detailed Usage](docs/usage.md), [Changelog Templates](docs/changelogs.md), [Updating Markdown Sections](docs/markdown.md), [Testing Custom Workflows](docs/testing.md), the [Lifecycle Hook Example](examples/lifecycle-hooks/README.md), [Lifecycle Hooks](docs/hooks.md), [Composable Workflows](docs/workflows.md), [Execution Providers and Contexts](docs/execution.md), [Recovery and Reconciliation](docs/recovery.md), and [Semantic Releases](docs/semantic.md).
 
 ## License
 
