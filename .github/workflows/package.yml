@@ -3,7 +3,8 @@ name: Package
 on:
   push:
     branches: [master]
-  pull_request: {}
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -21,32 +22,49 @@ jobs:
     steps:
       - name: Check Out Source
         uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check Local Package Claim
+        if: github.event_name == 'pull_request'
+        uses: dblock/already-tested@v0.1.1
+        id: tested
+        with:
+          check: package-ubuntu-latest-${{ runner.arch }}-node-${{ matrix.entry.node }}-npm-${{ matrix.entry.npm }}
       - name: Set Up Node
+        if: steps.tested.outputs.skip != 'true'
         uses: actions/setup-node@v7.1.0
         with:
           node-version: '26'
           cache: npm
       - name: Install Development Dependencies
+        if: steps.tested.outputs.skip != 'true'
         run: npm ci
       - name: Set Up Consumer Node
+        if: steps.tested.outputs.skip != 'true'
         uses: actions/setup-node@v7.1.0
         with:
           node-version: ${{ matrix.entry.node }}
           package-manager-cache: false
       - name: Select npm Version
+        if: steps.tested.outputs.skip != 'true'
         run: npm install --global npm@${{ matrix.entry.npm }}
       - name: Validate Packed Consumer
+        if: steps.tested.outputs.skip != 'true'
         run: npm run test:package
       - name: Validate Empty Archive Override
+        if: steps.tested.outputs.skip != 'true'
         env:
           PACKAGE_ARCHIVE: ''
         run: npm run test:package
       - name: Build Retained Archive
+        if: steps.tested.outputs.skip != 'true'
         id: archive
         run: |
           npm pack --json --pack-destination "$RUNNER_TEMP" > "$RUNNER_TEMP/pack.json"
           node --input-type=module -e 'import { readFileSync } from "node:fs"; const output = JSON.parse(readFileSync(process.env.RUNNER_TEMP + "/pack.json", "utf8")); const [pack] = Array.isArray(output) ? output : Object.values(output); console.log("filename=" + pack.filename);' >> "$GITHUB_OUTPUT"
       - name: Validate Retained Archive
+        if: steps.tested.outputs.skip != 'true'
         env:
           PACKAGE_ARCHIVE: ${{ runner.temp }}/${{ steps.archive.outputs.filename }}
         run: npm run test:package

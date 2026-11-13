@@ -3,7 +3,8 @@ name: Lint
 on:
   push:
     branches: [master]
-  pull_request: {}
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -15,12 +16,24 @@ jobs:
     steps:
       - name: Check Out Source
         uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check Local Lint Claim
+        if: github.event_name == 'pull_request'
+        uses: dblock/already-tested@v0.1.1
+        id: tested
+        with:
+          check: lint-ubuntu-latest-${{ runner.arch }}-node-26
       - name: Set Up Node
+        if: steps.tested.outputs.skip != 'true'
         uses: actions/setup-node@v7.1.0
         with:
           node-version: '26'
           cache: npm
       - name: Install Development Dependencies
+        if: steps.tested.outputs.skip != 'true'
         run: npm ci
       - name: Run Lint
+        if: steps.tested.outputs.skip != 'true'
         run: npm run lint

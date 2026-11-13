@@ -28,6 +28,14 @@ Keep semantic releases opt-in and numeric/manual-changelog behavior unchanged. S
 
 Maintain separate `Test`, `Lint`, and `Package` workflows and Coveralls upload. Use explicit `matrix.entry` lists of compact inline objects, not `include`/`exclude` or Cartesian axes. Type-check runtime and positive/negative contract fixtures; lint TypeScript, JavaScript, YAML, Markdown, embedded JavaScript, and spelling with `npm run lint`. Enforce title-case headings/display names, preserve proper names/expressions, and keep reviewed vocabulary in `.spellcheck.txt`. Run `actionlint .github/workflows/*.yml examples/*.yml` when changing workflow interfaces. JavaScript Danger checks are not configured.
 
+## Local Check Claims
+
+Use the pinned `already-tested` CLI and [local claim instructions](CONTRIBUTING.md#local-check-claims) only after running the complete check in the actual CI job's OS, CPU architecture, Node/npm versions, and setup environment. Never infer Linux/Windows results from macOS, lint from tests, consumer coverage from one archive mode, or compatibility with a different Node version. Omit claims for environments you did not reproduce; normal CI will run.
+
+Commit all intended inputs, leave the tracked working tree clean, then generate a claim with the exact workflow/check from the table in CONTRIBUTING, `--command` describing the complete executed check, and `--environment` recording actual OS/CPU/toolchain versions. Paste the entire CLI output into the PR description, preserving its hidden claim and AI disclosure. Do not put claims in comments or source files. Do not use file filters or blanket claims. After tracked source/workflow changes, retest, commit, and replace stale claims.
+
+All `master` pushes, the Linux Node 26 coverage/Coveralls lane, and publishing workflows always run independently of claims. PR-description claims are trusted contributor statements, not execution evidence or a security boundary; missing, stale, malformed, or unverifiable claims must run CI normally.
+
 ## Documentation and Versions
 
 Keep Markdown paragraphs on one line. Update documentation with behavior; keep DESIGN current and remove superseded proposals rather than writing an implementation diary. Add changelog entries for features, improvements, and fixes, not minor typos or the initial scaffold. Use actual PR numbers and contributor attribution, oldest to newest above the final Next placeholder; predict the number before opening and verify/correct it afterward. See CONTRIBUTING for the exact entry format.
