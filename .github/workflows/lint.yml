@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
       - name: Check Local Lint Claim
         if: github.event_name == 'pull_request'
-        uses: dblock/already-tested@v0.1.1
+        uses: dblock/already-tested@v0.2.0
         id: tested
         with:
           check: lint-ubuntu-latest-${{ runner.arch }}-node-26

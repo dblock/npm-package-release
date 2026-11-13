@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
       - name: Check Local Test Claim
         if: github.event_name == 'pull_request' && !matrix.entry.coverage
-        uses: dblock/already-tested@v0.1.1
+        uses: dblock/already-tested@v0.2.0
         id: tested
         with:
           check: test-${{ matrix.entry.os }}-${{ runner.arch }}-node-${{ matrix.entry.node }}

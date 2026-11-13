@@ -21,12 +21,12 @@ To test a retained artifact without repacking, use `PACKAGE_ARCHIVE=/absolute/pa
 Install the same released CLI version as the Actions gate:
 
 ```sh
-curl -fsSL https://github.com/dblock/already-tested/releases/download/v0.1.1/install.sh | sh -s -- --version v0.1.1
+curl -fsSL https://github.com/dblock/already-tested/releases/download/v0.2.0/install.sh | sh -s -- --version v0.2.0
 export PATH="$HOME/.local/bin:$PATH"
 already-tested --version
 ```
 
-Use the [Windows installer](https://github.com/dblock/already-tested/releases/download/v0.1.1/install.ps1) with `-Version v0.1.1` for Windows checks. Keep CLI and Action versions together when updating them.
+Use the [Windows installer](https://github.com/dblock/already-tested/releases/download/v0.2.0/install.ps1) with `-Version v0.2.0` for Windows checks. Keep CLI and Action versions together when updating them.
 
 | Workflow | Check ID | Complete Local Check |
 | --- | --- | --- |
