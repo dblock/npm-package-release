@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
       - name: Check Local Package Claim
         if: github.event_name == 'pull_request'
-        uses: dblock/already-tested@v0.1.1
+        uses: dblock/already-tested@v0.2.0
         id: tested
         with:
           check: package-ubuntu-latest-${{ runner.arch }}-node-${{ matrix.entry.node }}-npm-${{ matrix.entry.npm }}
