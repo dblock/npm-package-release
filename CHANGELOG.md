@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 (Next)
+## 0.3.0 (2026/11/25)
 
 - [#38](https://github.com/dblock/npm-package-release/pull/38): Upgrade already-tested Action and CLI installer pins to v0.2.0 while preserving environment-specific claims and independent coverage and publication checks - [@dblock](https://github.com/dblock).
 - [#51](https://github.com/dblock/npm-package-release/pull/51): Release without a package registry with `publisher: null`, making the GitHub Release the only destination and skipping registry lookup, publication, and visibility checks - [@dblock](https://github.com/dblock).
@@ -8,7 +8,6 @@
 - [#53](https://github.com/dblock/npm-package-release/pull/53): Add `ZipArchive`, a project that releases a byte-reproducible zip of a build directory, such as a private browser extension, as a GitHub Release asset - [@dblock](https://github.com/dblock).
 - [#55](https://github.com/dblock/npm-package-release/pull/55): Add `GitHubAction`, a project that releases a JavaScript GitHub Action by tagging a reproducible build commit containing its ignored build output on top of the release commit - [@dblock](https://github.com/dblock).
 - [#56](https://github.com/dblock/npm-package-release/pull/56): Add opt-in `floatingTags` (`["major", "minor"]` or `["major"]`) to move `vX` and `vX.Y` forward to each release with leased atomic pushes, never backwards and never for `vX.Y.Z` - [@dblock](https://github.com/dblock).
-- Your contribution here.
 
 ## 0.2.0 (2026/11/13)
 
