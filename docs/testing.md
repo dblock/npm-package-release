@@ -67,7 +67,7 @@ Child commands retain runtime paths and platform essentials, but clear inherited
 
 `project.publisher` is a `TestPublisher`; `project.host` is a `TestReleaseHost`. They copy the exact archive into their respective local directories and never call npm publication or GitHub APIs. Publisher metadata comes from the retained archive with its real SHA-512/SHA-1 checksums. Repetition accepts identical bytes and rejects conflicts without overwriting existing files.
 
-Use `publisher.archive(name, version)` or `host.archive(name, version)` to inspect retained bytes. The host checks archive identity and that the supplied notes file exists, but does not model GitHub release metadata or assets beyond the archive. Keep live hosting/authentication tests separate.
+Use `publisher.archive(name, version)` or `host.archive(name, version)` to inspect retained bytes. The host checks archive identity and that the supplied notes file exists, but does not model GitHub release metadata or assets beyond the archive. Both adapters read the manifest embedded in an npm tarball; for a `ZipArchive` release, pass a `GitHubReleaseHost` with a command runner that simulates `gh`, as in this repository's zip release test. Keep live hosting/authentication tests separate.
 
 For a failure case, supply a new class instance to the same builder:
 

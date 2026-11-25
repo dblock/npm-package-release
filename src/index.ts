@@ -20,6 +20,8 @@ export type {
 } from "./execution.js";
 export { Git } from "./git.js";
 export { NpmPackage } from "./package.js";
+export { ZipArchive } from "./zip.js";
+export type { ZipArchiveOptions } from "./zip.js";
 export {
   NumericPatchVersions, MarkdownChangelog, KeepAChangelog, IntrideaChangelog,
   GitHubReleaseHost, HookValidator, DirectoryReleaseStore, RegistryVisibility,

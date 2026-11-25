@@ -36,11 +36,7 @@ export class NpmPackage implements PackageProject, PackagePublisher {
   }
 
   async read(): Promise<PackageManifest> {
-    const metadata: PackageManifest = JSON.parse(await readFile(join(this.cwd, "package.json"), "utf8"));
-    numericVersion(metadata.version);
-    if (typeof metadata.name !== "string" || !/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/u.test(metadata.name)) {
-      throw new Error("Expected an npm package name.");
-    }
+    const metadata = await readManifest(this.cwd);
     if (metadata.private || metadata.workspaces || metadata.publishConfig?.directory ||
       (metadata.publishConfig?.registry && metadata.publishConfig.registry !== "https://registry.npmjs.org/") ||
       (metadata.publishConfig?.tag && metadata.publishConfig.tag !== "latest")) {
@@ -50,37 +46,11 @@ export class NpmPackage implements PackageProject, PackagePublisher {
   }
 
   async setVersion(version: string) {
-    numericVersion(version);
-    const manifest = await this.read();
-    const lock = await this.lockfile(manifest);
-    if (manifest.version === version) return;
-    const files: [string, { version: string }][] = [[join(this.cwd, "package.json"), { ...manifest }]];
-    if (lock) {
-      if (lock.packages?.[""]) lock.packages[""].version = version;
-      files.push([join(this.cwd, "package-lock.json"), lock]);
-    }
-    for (const [path, metadata] of files) {
-      const source = await readFile(path, "utf8");
-      metadata.version = version;
-      const indent = /\r?\n([ \t]+)"/u.exec(source)?.[1] || 2;
-      const newline = source.includes("\r\n") ? "\r\n" : "\n";
-      await writeFile(path, JSON.stringify(metadata, null, indent).replaceAll("\n", newline) + newline);
-    }
+    await setManifestVersion(this.cwd, version, this);
   }
 
   async lockfile(manifest: PackageManifest): Promise<Lockfile | null> {
-    try {
-      const lock: Lockfile = JSON.parse(await readFile(join(this.cwd, "package-lock.json"), "utf8"));
-      if (lock.name !== manifest.name || lock.version !== manifest.version ||
-        (lock.packages?.[""] && (lock.packages[""].version !== manifest.version ||
-          (lock.packages[""].name && lock.packages[""].name !== manifest.name)))) {
-        throw new Error("Lockfile and manifest identity/version must agree.");
-      }
-      return lock;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      return null;
-    }
+    return manifestLockfile(this.cwd, manifest);
   }
 
   async view(name: string, version: string): Promise<RegistryMetadata | null> {
@@ -178,6 +148,50 @@ export class NpmPackage implements PackageProject, PackagePublisher {
       if (await published()) return;
       throw error;
     }
+  }
+}
+
+const npmName = /^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/u;
+
+export async function readManifest(cwd: string): Promise<PackageManifest> {
+  const metadata: PackageManifest = JSON.parse(await readFile(join(cwd, "package.json"), "utf8"));
+  numericVersion(metadata.version);
+  if (typeof metadata.name !== "string" || !npmName.test(metadata.name)) throw new Error("Expected an npm package name.");
+  return metadata;
+}
+
+export async function setManifestVersion(cwd: string, version: string,
+  project: Pick<PackageProject, "read" | "lockfile">): Promise<void> {
+  numericVersion(version);
+  const manifest = await project.read();
+  const lock = await project.lockfile(manifest);
+  if (manifest.version === version) return;
+  const files: [string, { version: string }][] = [[join(cwd, "package.json"), { ...manifest }]];
+  if (lock) {
+    if (lock.packages?.[""]) lock.packages[""].version = version;
+    files.push([join(cwd, "package-lock.json"), lock]);
+  }
+  for (const [path, metadata] of files) {
+    const source = await readFile(path, "utf8");
+    metadata.version = version;
+    const indent = /\r?\n([ \t]+)"/u.exec(source)?.[1] || 2;
+    const newline = source.includes("\r\n") ? "\r\n" : "\n";
+    await writeFile(path, JSON.stringify(metadata, null, indent).replaceAll("\n", newline) + newline);
+  }
+}
+
+export async function manifestLockfile(cwd: string, manifest: PackageManifest): Promise<Lockfile | null> {
+  try {
+    const lock: Lockfile = JSON.parse(await readFile(join(cwd, "package-lock.json"), "utf8"));
+    if (lock.name !== manifest.name || lock.version !== manifest.version ||
+      (lock.packages?.[""] && (lock.packages[""].version !== manifest.version ||
+        (lock.packages[""].name && lock.packages[""].name !== manifest.name)))) {
+      throw new Error("Lockfile and manifest identity/version must agree.");
+    }
+    return lock;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    return null;
   }
 }
 

@@ -3,7 +3,7 @@ import {
   PublishArtifact, release, ReleaseWorkflow,
   LocalExecutionProvider, prepare,
   SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator,
-  LifecycleHooks, MarkdownSection, GeneratedChangelog,
+  LifecycleHooks, MarkdownSection, GeneratedChangelog, ZipArchive,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
@@ -198,3 +198,10 @@ new SemanticReleaseWorkflow({ versionReferences: { "public/manifest.json": [/"ve
 new ReleaseWorkflow({ versionReferences: { "README.md": "1.0.0" } });
 // @ts-expect-error Reference patterns are regular expressions, not strings.
 new ReleaseWorkflow({ releaseReferences: { "README.md": ["@(?<version>.+)"] } });
+new ReleaseWorkflow({
+  project: new ZipArchive({ build: ["npm", "run", "build"], directory: "build", name: "example-extension" }),
+  publisher: null,
+});
+new ZipArchive().bind({ cwd: ".", run: async () => "", env: {} }) satisfies PackageProject;
+// @ts-expect-error Builds run an argument array without a shell.
+new ZipArchive({ build: "npm run build" });

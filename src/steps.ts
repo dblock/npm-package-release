@@ -16,7 +16,7 @@ import {
   RegistryVisibility, snapshot, verificationOptions,
 } from "./services.js";
 import type {
-  Artifact, Command, Environment, HookContext, Log, PackageManifest, ReleaseConfig, ReleaseOptions, ReleaseRepository,
+  Artifact, Command, Environment, HookContext, Log, PackageManifest, PackageProject, ProjectContext, ReleaseConfig, ReleaseOptions, ReleaseRepository,
   ReleaseServices, ReleaseState,
 } from "./contracts.js";
 import type { Step, StepEvent, WorkflowObserver } from "./workflow.js";
@@ -176,6 +176,10 @@ export function validateDestinations(config: ReleaseConfig): void {
   }
 }
 
+function bindProject(config: ReleaseConfig, context: ProjectContext): PackageProject | undefined {
+  return config.project?.bind ? config.project.bind(Object.freeze(context)) : config.project;
+}
+
 function releaseHost(config: ReleaseConfig, run: Command, manifest: PackageManifest) {
   const repository = manifest.repository?.url?.replace(/^git\+/u, "").match(
     /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/u,
@@ -242,7 +246,7 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     const verification = verificationOptions(config.verifier?.options);
     let execute = scopedCommand(cwd, run, timezone, "release", env);
     const repository = await this.repository(cwd, execute, provider, env);
-    const project = config.project || new NpmPackage(cwd, execute);
+    const project = bindProject(config, { cwd, run: execute, env }) || new NpmPackage(cwd, execute);
     const manifest = await project.read();
     const versions = config.versions || new NumericPatchVersions();
     const { version, nextVersion } = versions.select(manifest.version, options.version);
@@ -266,7 +270,7 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     });
     await store.initialize(state);
     const services = releaseServices(config, {
-      repository, project: config.project || npm, publisher, versions, store, host,
+      repository, project: bindProject(config, { cwd, run: execute, env }) || npm, publisher, versions, store, host,
     });
     const runtime = new ReleaseRuntime(config, cwd, run, log, env, services, state, provider, lifecycleFor(options));
     return Object.freeze({ kind: "initialized", runtime, state, release: runtime.description() });

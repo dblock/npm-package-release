@@ -3,6 +3,7 @@ import process from "node:process";
 import { command } from "./command.js";
 import { Git } from "./git.js";
 import { NpmPackage } from "./package.js";
+import { ZipArchive } from "./zip.js";
 import { Workflow } from "./workflow.js";
 import { lifecycleOptions } from "./lifecycle.js";
 import { currentExecutionProvider } from "./execution.js";
@@ -84,7 +85,8 @@ export async function verify({
   const publisher = state.registry === false ? null : services.publisher || npm;
   return verifyRetained(log, provider, {
     repository: services.repository || new Git(execute, { branch: state.branch, remote: state.remote }),
-    project: services.project || npm, publisher, store,
+    project: services.project ||
+      (state.artifact?.filename?.endsWith(".zip") ? new ZipArchive({ cwd, run: execute, env }) : npm), publisher, store,
     verifier: publisher ? services.verifier || new RegistryVisibility(publisher) : null,
     changelog: services.changelog || null, host: services.host || null,
     validator: services.validator || new HookValidator(), versions: services.versions || new NumericPatchVersions(),

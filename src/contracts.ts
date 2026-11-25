@@ -118,7 +118,13 @@ export interface ReleaseRepository {
   push(commit: string, version?: string): Promise<void>;
   verifyTag(version: string, commit: string): Promise<void>;
 }
+export interface ProjectContext {
+  readonly cwd: string;
+  readonly run: Command;
+  readonly env: Environment;
+}
 export interface PackageProject {
+  bind?(context: ProjectContext): PackageProject;
   read(): Promise<PackageManifest>;
   setVersion(version: string): Promise<void>;
   lockfile(manifest: PackageManifest): Promise<Lockfile | null>;
