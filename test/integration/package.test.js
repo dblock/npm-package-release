@@ -104,7 +104,7 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   await checkSelfRelease(t, join(consumer, "node_modules/npm-package-release"));
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection, GeneratedChangelog } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection, GeneratedChangelog, ZipArchive } from "npm-package-release";
 import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, LifecycleHook, LifecycleContext } from "npm-package-release";
 import { ReleaseTestProject, TestPublisher, TestReleaseHost } from "npm-package-release/testing";
 export async function commitContract(repository: import("npm-package-release").ReleaseRepository, tree: string) {
@@ -205,6 +205,12 @@ Workflow.start<ReleaseOptions>().then(new AnalyzeSemanticRelease()).then(new Ini
 Workflow.start<ReleaseOptions>().then(new InitializeSemanticRelease());
 // @ts-expect-error Prepared releases cannot skip artifact validation.
 flow.then(new PublishArtifact());
+new ReleaseWorkflow({
+  project: new ZipArchive({ build: ["npm", "run", "build"], directory: "build", name: "extension" }), publisher: null,
+  versionReferences: { "public/manifest.json": [/"version": "(?<version>[^"]+)"/u] },
+});
+// @ts-expect-error Releases without a registry cannot verify registry visibility.
+String(new ReleaseWorkflow({ publisher: null }).prepare().then((built) => built.runtime.services.verifier.options));
 `);
   await writeFile(join(consumer, "tsconfig.json"), JSON.stringify({
     compilerOptions: {
@@ -215,6 +221,13 @@ flow.then(new PublishArtifact());
   await command(process.execPath, [join(root, "node_modules/typescript/bin/tsc"), "--project", consumer]);
   const fixture = await releaseFixture(t);
   await fixture.assertReleased(await installedApi.release(new installedApi.ReleaseWorkflow(fixture.config), fixture));
+  const extension = await mkdtemp(join(tmpdir(), "npr-installed-zip-"));
+  t.after(() => rm(extension, { recursive: true, force: true }));
+  await mkdir(join(extension, "build"));
+  await writeFile(join(extension, "build", "manifest.json"), "{}\n");
+  const zipped = await new installedApi.ZipArchive({ build: [process.execPath, "-e", ""], cwd: extension,
+    env: { SOURCE_DATE_EPOCH: "0" } }).pack(extension, { name: "extension", version: "1.0.0" });
+  assert.equal(zipped.filename, "extension-v1.0.0.zip");
   const { NpmPackage } = installedApi;
   const publicRegistry = new NpmPackage(consumer, (program, args, options) =>
     command(program, args, { cwd: consumer, ...options }));

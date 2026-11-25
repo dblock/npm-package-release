@@ -5,6 +5,7 @@
 - [#38](https://github.com/dblock/npm-package-release/pull/38): Upgrade already-tested Action and CLI installer pins to v0.2.0 while preserving environment-specific claims and independent coverage and publication checks - [@dblock](https://github.com/dblock).
 - [#51](https://github.com/dblock/npm-package-release/pull/51): Release without a package registry with `publisher: null`, making the GitHub Release the only destination and skipping registry lookup, publication, and visibility checks - [@dblock](https://github.com/dblock).
 - [#52](https://github.com/dblock/npm-package-release/pull/52): Add `versionReferences` and `releaseReferences` to update version captures in other files, such as manifests and install snippets, in the release and next-development commits - [@dblock](https://github.com/dblock).
+- [#53](https://github.com/dblock/npm-package-release/pull/53): Add `ZipArchive`, a project that releases a byte-reproducible zip of a build directory, such as a private browser extension, as a GitHub Release asset - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.2.0 (2026/11/13)
