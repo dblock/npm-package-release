@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 (Next)
+
+- Your contribution here.
+
 ## 0.3.0 (2026/11/25)
 
 - [#38](https://github.com/dblock/npm-package-release/pull/38): Upgrade already-tested Action and CLI installer pins to v0.2.0 while preserving environment-specific claims and independent coverage and publication checks - [@dblock](https://github.com/dblock).
