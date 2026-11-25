@@ -209,7 +209,9 @@ new ReleaseWorkflow({
   project: new ZipArchive({ build: ["npm", "run", "build"], directory: "build", name: "extension" }), publisher: null,
   versionReferences: { "public/manifest.json": [/"version": "(?<version>[^"]+)"/u] },
 });
-new ReleaseWorkflow({ project: new GitHubAction({ output: ["dist"], name: "example-action" }), publisher: null });
+new ReleaseWorkflow({ project: new GitHubAction({ output: ["dist"], name: "example-action" }), publisher: null, floatingTags: ["major", "minor"] });
+// @ts-expect-error Floating tags are major or minor version tags only.
+new ReleaseWorkflow({ floatingTags: ["patch"] });
 export async function actionBranch() { return (await ReleaseTestProject.create({ branch: "main" })).branch; }
 // @ts-expect-error GitHub Action builds run an argument array without a shell.
 new GitHubAction({ build: "npm run build" });
@@ -244,6 +246,11 @@ String(new ReleaseWorkflow({ publisher: null }).prepare().then((built) => built.
   assert.equal(built.filename, "example-action-v1.0.0.zip");
   assert.equal((await action.git("show", "-s", "--format=%P %s", built.commit)).trim(),
     `${(await action.git("rev-parse", "HEAD")).trim()} ${installedApi.buildCommitMessage("1.0.0")}`);
+  await action.git("tag", "v1.0.0", built.commit);
+  await action.git("push", "origin", "v1.0.0");
+  assert.deepEqual(await new installedApi.Git(action.run, { branch: "main" }).floatingTags("1.0.0", built.commit, ["major", "minor"]),
+    ["v1", "v1.0"]);
+  assert.equal((await action.git("ls-remote", "origin", "refs/tags/v1")).split("\t")[0], built.commit);
   const { NpmPackage } = installedApi;
   const publicRegistry = new NpmPackage(consumer, (program, args, options) =>
     command(program, args, { cwd: consumer, ...options }));

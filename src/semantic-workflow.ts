@@ -11,7 +11,7 @@ import { snapshot } from "./services.js";
 import { GitHistory, SemanticRelease, SemanticDecision, semanticPlan } from "./semantic.js";
 import {
   InitializeRelease, PrepareRelease,
-  ReleaseRuntime, ReleaseObserver, referenceOptions, scopedCommand, validateDestinations,
+  ReleaseRuntime, ReleaseObserver, floatingTagOptions, referenceOptions, scopedCommand, validateDestinations,
 } from "./steps.js";
 import type { Step } from "./workflow.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
@@ -114,7 +114,7 @@ export class SemanticReleaseWorkflow implements Step<ReleaseOptions, ReleaseStat
     if (config.project instanceof GitHubAction) {
       throw new Error("SemanticReleaseWorkflow does not support GitHubAction: its release tags are not on the default branch history.");
     }
-    config = Object.freeze({ ...config, ...referenceOptions(config) });
+    config = Object.freeze({ ...config, ...referenceOptions(config), ...floatingTagOptions(config) });
     this.config = config;
     const nextDevelopment = config.nextDevelopment ?? false;
     this.preparation = prepareRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
@@ -122,7 +122,7 @@ export class SemanticReleaseWorkflow implements Step<ReleaseOptions, ReleaseStat
       .then(new InitializeSemanticRelease(config))
       .then(new PrepareRelease())
       .then(new ValidateSemanticDecision()));
-    this.workflow = finishRelease(this.preparation, nextDevelopment);
+    this.workflow = finishRelease(this.preparation, nextDevelopment, config.floatingTags !== undefined);
   }
 
   async run(options: ReleaseOptions = {}, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<ReleaseState> {

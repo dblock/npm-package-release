@@ -141,6 +141,17 @@ function validateConfig(config: ReleaseConfig): void {
   }
   validateDestinations(config);
   referenceOptions(config);
+  floatingTagOptions(config);
+}
+
+export function floatingTagOptions(config: ReleaseConfig): Pick<ReleaseConfig, "floatingTags"> {
+  if (!config || typeof config !== "object" || config.floatingTags === undefined) return {};
+  const tags = config.floatingTags;
+  if (!Array.isArray(tags) || !tags.length || tags.some((tag) => tag !== "major" && tag !== "minor") ||
+    new Set(tags).size !== tags.length) {
+    throw new Error('floatingTags must be a nonempty list of distinct "major" and "minor" entries.');
+  }
+  return { floatingTags: Object.freeze([...tags]) };
 }
 
 export function referenceOptions(config: ReleaseConfig): Pick<ReleaseConfig, "versionReferences" | "releaseReferences"> {
@@ -382,6 +393,22 @@ export class CreateHostedRelease implements Step<PushedRelease, HostedRelease> {
   }
 }
 
+export class MoveFloatingTags implements Step<HostedRelease, HostedRelease> {
+  readonly id = "floating-tags";
+  async run(input: HostedRelease): Promise<HostedRelease> {
+    const { runtime, state } = input;
+    const kinds = runtime.config.floatingTags;
+    if (!kinds?.length) return input;
+    const { repository } = runtime.services;
+    if (!repository.floatingTags) throw new Error("Floating tags require a repository that implements floatingTags.");
+    const floatingTags = await repository.floatingTags(state.version, state.artifact.commit ?? state.releaseCommit, kinds);
+    const updated = snapshot({ ...state, floatingTags });
+    await runtime.services.store.save(updated);
+    runtime.log(`[npr] floating tags at v${state.version}: ${floatingTags.join(", ") || "none"}`);
+    return Object.freeze({ ...input, state: updated });
+  }
+}
+
 export class PrepareNextVersion implements Step<HostedRelease | PushedRelease, NextRelease> {
   readonly id = "next";
   async run(input: HostedRelease | PushedRelease, execution?: ExecutionContext): Promise<NextRelease> {
@@ -447,6 +474,12 @@ export async function verifyRetained(
       throw new Error("Invalid retained build commit identity.");
     }
     await services.repository.verifyTag(state.version, commit ?? state.releaseCommit);
+    if (state.floatingTags !== undefined) {
+      if (!Array.isArray(state.floatingTags) || !services.repository.verifyFloatingTags) {
+        throw new Error("Retained floating tags cannot be verified.");
+      }
+      await services.repository.verifyFloatingTags(state.version, state.floatingTags);
+    }
     log(`[npr] verifying: ${state.name}@${state.version}`);
     const registry = state.registry !== false;
     if (registry && !services.verifier) throw new Error("Registry verification requires a verifier.");
