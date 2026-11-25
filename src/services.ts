@@ -27,6 +27,7 @@ export function snapshot<State extends ReleaseState>(state: State): Readonly<Sta
     ...state,
     verificationOptions: Object.freeze({ ...state.verificationOptions }),
     ...(state.artifact ? { artifact: Object.freeze({ ...state.artifact }) } : {}),
+    ...(state.floatingTags ? { floatingTags: Object.freeze([...state.floatingTags]) } : {}),
     ...(state.semantic ? { semantic: semanticPlan(state.semantic) } : {}),
   });
 }

@@ -18,7 +18,7 @@ export { ExecutionContext, LocalExecutionProvider, GitHubExecutionProvider, curr
 export type {
   ExecutionProvider, ExecutionAttributes, ExecutionStep, StepHistory, StepOutcome, ExecutionRun, WorkflowDescription,
 } from "./execution.js";
-export { Git, buildCommitMessage } from "./git.js";
+export { Git, buildCommitMessage, floatingTagNames } from "./git.js";
 export { NpmPackage } from "./package.js";
 export { ZipArchive } from "./zip.js";
 export type { ZipArchiveOptions, ZipEntry } from "./zip.js";
@@ -30,7 +30,7 @@ export {
 } from "./services.js";
 export {
   InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, PublishArtifact,
-  PushRelease, CreateHostedRelease, PrepareNextVersion, VerifyRelease, ReleaseRuntime, ReleaseObserver,
+  PushRelease, CreateHostedRelease, MoveFloatingTags, PrepareNextVersion, VerifyRelease, ReleaseRuntime, ReleaseObserver,
 } from "./steps.js";
 export type {
   ReleaseContext, InitializedRelease, PreparedRelease, ValidatedRelease, CommittedRelease, BuiltRelease,

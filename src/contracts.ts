@@ -55,6 +55,7 @@ export interface ReleaseState extends ReleaseIdentity {
   readonly releaseCommit?: string;
   readonly artifact?: Artifact;
   readonly nextCommit?: string;
+  readonly floatingTags?: readonly string[];
   readonly verification?: Verification | "failed";
   readonly error?: string;
   readonly failedStep?: string;
@@ -74,6 +75,8 @@ export interface ArtifactContext extends HookContext {
   readonly archive: string;
   readonly consumer: string;
 }
+/** A floating tag moved to each release: `major` is `vX`, `minor` is `vX.Y`. */
+export type FloatingTag = "major" | "minor";
 export type ChangelogFormat = "intridea" | "keep-a-changelog";
 export interface ReleaseConfig extends Partial<ReleaseServices> {
   readonly hooks?: LifecycleHooks;
@@ -84,6 +87,7 @@ export interface ReleaseConfig extends Partial<ReleaseServices> {
   readonly timezone?: string;
   readonly versionReferences?: Readonly<Record<string, readonly RegExp[]>>;
   readonly releaseReferences?: Readonly<Record<string, readonly RegExp[]>>;
+  readonly floatingTags?: readonly FloatingTag[];
   readonly prepare?: (context: HookContext) => Promise<void>;
   readonly next?: (context: HookContext) => Promise<void>;
 }
@@ -119,6 +123,8 @@ export interface ReleaseRepository {
   bundle(path: string, version: string): Promise<void>;
   push(commit: string, version?: string, tagCommit?: string): Promise<void>;
   verifyTag(version: string, commit: string): Promise<void>;
+  floatingTags?(version: string, commit: string, kinds: readonly FloatingTag[]): Promise<readonly string[]>;
+  verifyFloatingTags?(version: string, tags: readonly string[]): Promise<void>;
 }
 export interface ProjectContext {
   readonly cwd: string;

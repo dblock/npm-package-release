@@ -16,8 +16,8 @@ import {
 } from "./services.js";
 import {
   InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, PublishArtifact,
-  PushRelease, CreateHostedRelease, PrepareNextVersion, VerifyRelease, ReleaseObserver,
-  artifactDirectory, referenceOptions, scopedCommand, validateDestinations, verifyRetained,
+  PushRelease, CreateHostedRelease, MoveFloatingTags, PrepareNextVersion, VerifyRelease, ReleaseObserver,
+  artifactDirectory, floatingTagOptions, referenceOptions, scopedCommand, validateDestinations, verifyRetained,
 } from "./steps.js";
 import type { BuiltRelease, PreparedRelease } from "./steps.js";
 
@@ -25,8 +25,10 @@ export function prepareRelease(workflow: Workflow<ReleaseOptions, PreparedReleas
   return workflow.then(new ValidateRelease()).then(new CommitRelease()).then(new BuildArtifact());
 }
 
-export function finishRelease(workflow: Workflow<ReleaseOptions, BuiltRelease>, nextDevelopment = true): Workflow<ReleaseOptions, ReleaseState> {
-  const hosted = workflow.then(new PublishArtifact()).then(new PushRelease()).then(new CreateHostedRelease());
+export function finishRelease(workflow: Workflow<ReleaseOptions, BuiltRelease>, nextDevelopment = true,
+  floatingTags = false): Workflow<ReleaseOptions, ReleaseState> {
+  const created = workflow.then(new PublishArtifact()).then(new PushRelease()).then(new CreateHostedRelease());
+  const hosted = floatingTags ? created.then(new MoveFloatingTags()) : created;
   return nextDevelopment ? hosted.then(new PrepareNextVersion()).then(new VerifyRelease()) : hosted.then(new VerifyRelease());
 }
 
@@ -37,12 +39,12 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
 
   constructor(private readonly config: ReleaseConfig = {}) {
     validateDestinations(config);
-    config = Object.freeze({ ...config, ...referenceOptions(config) });
+    config = Object.freeze({ ...config, ...referenceOptions(config), ...floatingTagOptions(config) });
     this.config = config;
     this.preparation = prepareRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
       .then(new InitializeRelease(config))
       .then(new PrepareRelease()));
-    this.workflow = finishRelease(this.preparation);
+    this.workflow = finishRelease(this.preparation, true, config.floatingTags !== undefined);
   }
 
   async run(options: ReleaseOptions = {}, execution?: ExecutionContext, provider?: ExecutionProvider): Promise<ReleaseState> {

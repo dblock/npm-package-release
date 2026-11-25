@@ -1,9 +1,16 @@
+import { compare } from "semver";
 import { numericVersion } from "./command.js";
-import type { Command, ReleaseRepository } from "./contracts.js";
+import type { Command, FloatingTag, ReleaseRepository } from "./contracts.js";
 
 /** Subject of the commit that adds build output on top of a release commit, such as a GitHub Action's. */
 export function buildCommitMessage(version: string): string {
   return `Build release ${numericVersion(version)}`;
+}
+
+/** Floating tag names for a numeric release version, in option order: `major` is `vX`, `minor` is `vX.Y`. */
+export function floatingTagNames(version: string, kinds: readonly FloatingTag[]): string[] {
+  const [major, minor] = numericVersion(version).split(".");
+  return kinds.map((kind) => kind === "major" ? `v${major}` : `v${major}.${minor}`);
 }
 
 export class Git implements ReleaseRepository {
@@ -196,6 +203,69 @@ export class Git implements ReleaseRepository {
     ];
     if (refs.length) await this.run("push", ...(version ? ["--atomic"] : []), this.remote, ...refs);
     await this.verify(commit, version, tagCommit);
+  }
+
+  // Remote tag refs: the ref value (for leases) and the commit it resolves to.
+  private async remoteTags(): Promise<Map<string, { ref: string; commit: string }>> {
+    const tags = new Map<string, { ref: string; commit: string }>();
+    for (const line of (await this.run("ls-remote", "--tags", this.remote)).split(/\r?\n/u).filter(Boolean)) {
+      const [object, ref] = line.split(/\s+/u);
+      const peeled = ref.endsWith("^{}");
+      const name = ref.slice("refs/tags/".length, peeled ? -3 : undefined);
+      const tag = tags.get(name);
+      if (peeled && tag) tag.commit = object;
+      else if (!peeled) tags.set(name, { ref: object, commit: tags.get(name)?.commit ?? object });
+    }
+    return tags;
+  }
+
+  // The highest release version tagged at a floating tag's commit within the same major (and minor) line.
+  private floatingVersion(tags: Map<string, { commit: string }>, name: string, commit: string): string | null {
+    const versions = [...tags].filter(([tag, { commit: tagged }]) => tagged === commit &&
+      /^v\d+\.\d+\.\d+$/u.test(tag) && `${tag}.`.startsWith(`${name}.`)).map(([tag]) => tag.slice(1));
+    return versions.sort(compare).at(-1) ?? null;
+  }
+
+  async floatingTags(version: string, commit: string, kinds: readonly FloatingTag[]): Promise<readonly string[]> {
+    await this.verify(null, version, commit);
+    const tags = await this.remoteTags();
+    const names: string[] = [];
+    const moves: string[] = [];
+    for (const name of floatingTagNames(version, kinds)) {
+      const current = tags.get(name);
+      if (current && current.commit !== commit) {
+        const pointed = this.floatingVersion(tags, name, current.commit);
+        if (!pointed) {
+          throw new Error(`Floating tag ${name} points at a commit without a ${name} release tag; inspect it before moving it.`);
+        }
+        // Never move a floating tag backwards: a later release in its line keeps it.
+        if (compare(pointed, version) >= 0) continue;
+      }
+      names.push(name);
+      if (current?.commit !== commit) moves.push(name);
+    }
+    if (moves.length) {
+      await this.run("push", "--atomic", ...moves.map((name) => `--force-with-lease=refs/tags/${name}:${tags.get(name)?.ref ?? ""}`),
+        this.remote, ...moves.map((name) => `${commit}:refs/tags/${name}`));
+    }
+    const pushed = await this.remoteTags();
+    for (const name of names) {
+      if (pushed.get(name)?.commit !== commit) throw new Error(`Remote ref mismatch: refs/tags/${name}`);
+    }
+    return Object.freeze(names);
+  }
+
+  async verifyFloatingTags(version: string, names: readonly string[]): Promise<void> {
+    numericVersion(version);
+    const tags = await this.remoteTags();
+    for (const name of names) {
+      if (typeof name !== "string" || !/^v\d+(?:\.\d+)?$/u.test(name) || !`${version}.`.startsWith(`${name.slice(1)}.`)) {
+        throw new Error("Invalid retained floating tag.");
+      }
+      const current = tags.get(name);
+      const pointed = current && this.floatingVersion(tags, name, current.commit);
+      if (!pointed || compare(pointed, version) < 0) throw new Error(`Remote ref mismatch: refs/tags/${name}`);
+    }
   }
 
   async verify(commit: string | null, version?: string, tagCommit = commit) {

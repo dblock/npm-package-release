@@ -216,3 +216,15 @@ export async function actionContracts(action: GitHubAction, artifact: BuiltRelea
   // @ts-expect-error Build output is a list of paths.
   new GitHubAction({ output: "dist" });
 }
+new ReleaseWorkflow({ floatingTags: ["major", "minor"] });
+new SemanticReleaseWorkflow({ floatingTags: ["major"] });
+// @ts-expect-error Floating tags are major or minor version tags only.
+new ReleaseWorkflow({ floatingTags: ["patch"] });
+// @ts-expect-error Floating tags are a list.
+new ReleaseWorkflow({ floatingTags: "major" });
+export async function floatingContracts(repository: ReleaseRepository, input: BuiltRelease) {
+  input.state.floatingTags satisfies readonly string[] | undefined;
+  // @ts-expect-error Custom repositories may not implement floating tags.
+  await repository.floatingTags("1.0.0", "a".repeat(40), ["major"]);
+  return repository.floatingTags?.("1.0.0", "a".repeat(40), ["major", "minor"]);
+}

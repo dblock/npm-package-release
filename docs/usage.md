@@ -35,7 +35,7 @@ Complete browser 2FA yourself. Compare the registry checksums with `npm pack` ou
 
 In **Settings → Environments**, create `release` and allow deployments only from `master` (or your actual default branch).
 
-Have an authorized administrator allow the workflow to push release/next-version commits and release tags. Remove blocking PR requirements, but keep force-push/deletion protections and no bypass actors. This allows fast-forward direct pushes by **all writers**, not only Actions; ordinary development should still use PRs.
+Have an authorized administrator allow the workflow to push release/next-version commits and release tags (and update `vX`/`vX.Y` tags when using [floating tags](#floating-tags)). Remove blocking PR requirements, but keep force-push/deletion protections and no bypass actors. This allows fast-forward direct pushes by **all writers**, not only Actions; ordinary development should still use PRs.
 
 ### 3. Configure Trusted Publishing
 
@@ -132,6 +132,7 @@ Replace `example` with the package's public API and check its actual behavior. T
 | `timezone` | `NPR_TIMEZONE` or `UTC` | Named timezone for calendar dates and command/Git timestamps. |
 | `versionReferences` | None | Files or globs mapped to regular expressions whose `version` group follows the package version in the release and next-development commits; see [Version References](#version-references). |
 | `releaseReferences` | None | Files or globs mapped to regular expressions whose `version` group is set to the released version in both commits; see [Version References](#version-references). |
+| `floatingTags` | None | `["major", "minor"]` or `["major"]` moves `vX` and `vX.Y`, or only `vX`, to each release; see [Floating Tags](#floating-tags). |
 | `prepare` | No additional edits | Trusted release edits after version/changelog preparation. |
 | `validator` | `new HookValidator()` | A `ReleaseValidator` instance. `HookValidator({ validate, validateArtifact })` adapts optional checks; default validation runs npm tests/lint for release and next-development files. |
 | `next` | No additional edits | Trusted next-development edits after the patch increment. |
@@ -262,6 +263,7 @@ export default new ReleaseWorkflow({
   changelog: new IntrideaChangelog("CHANGELOG.md", { placeholder: "* Your contribution here." }),
   project: new GitHubAction({ build: ["npm", "run", "build"], output: ["dist"], name: "example-action" }),
   publisher: null,
+  floatingTags: ["major", "minor"],
 });
 ```
 
@@ -296,9 +298,9 @@ Install `npm-package-release@0.2.0` as an exact development dependency, set the 
 2. Run the build, then create the build commit `Build release 1.0.0`: its only parent is the release commit and its tree is the release tree plus every file in `output`, added even though they are ignored. `action.yml` is unchanged.
 3. Zip `action.yml` and the build output as `example-action-v1.0.0.zip`, check that zip against the build commit, and pass its extracted files to `validateArtifact` as `consumer`, where the entry point can run.
 4. Tag `v1.0.0` at the build commit and atomically push `main` (the release commit) and the tag, without force. The branch never contains the build commit.
-5. Create the `v1.0.0` GitHub Release with the zip attached, then commit `Prepare next development iteration, 1.0.1` on top of the release commit with a new `### 1.0.1 (Next)` section and push `main`.
+5. Create the `v1.0.0` GitHub Release with the zip attached, create or move the [floating tags](#floating-tags) `v1` and `v1.0` to the build commit, then commit `Prepare next development iteration, 1.0.1` on top of the release commit with a new `### 1.0.1 (Next)` section and push `main`.
 
-Workflows reference the action as `owner/example@v1.0.0`. Release tags are never moved.
+Workflows reference the action as `owner/example@v1`, `owner/example@v1.0`, or `owner/example@v1.0.0`. The `v1.0.0` release tag is never moved; omit `floatingTags` to publish only exact tags, or use `["major"]` to move only `v1`.
 
 | Option | Default | Behavior |
 | --- | --- | --- |
@@ -312,7 +314,30 @@ The build commit is reproducible: its author, committer, and both dates come fro
 
 Reruns reconcile outputs like other releases. A release tag at a build commit identifies its parent as the release commit, so a matching rerun reuses the release commit, recreates the same build commit, and reuses the tag, push, and hosted release. A build that produces different output conflicts with the existing archive or tag and fails; tags are never overwritten. `release.json` records the build commit as `artifact.commit`, and `npr verify` checks the retained zip and that the remote `vVERSION` tag points at that commit. `SemanticReleaseWorkflow` rejects `GitHubAction`, since its release tags are not reachable from the default branch history.
 
-To migrate from a workflow that builds and moves tags when a GitHub Release is published, remove that workflow and its scripts: a release created with the Actions token does not trigger other workflows, and the tag already points at the build commit. This tool does not publish releases to GitHub Marketplace.
+To migrate from a workflow that builds and moves tags when a GitHub Release is published, remove that workflow and its scripts: a release created with the Actions token does not trigger other workflows, the tag already points at the build commit, and `floatingTags` moves `vX` and `vX.Y`. This tool does not publish releases to GitHub Marketplace.
+
+## Floating Tags
+
+Set `floatingTags` to move floating version tags to each release, as GitHub Actions commonly publish `owner/example@v1` alongside `owner/example@v1.2.3`. List the tags to move: `["major", "minor"]` moves `vX` and `vX.Y`, and `["major"]` moves only `vX`. The option is off by default, so no floating tags move.
+
+```js
+import { GitHubAction, IntrideaChangelog, ReleaseWorkflow } from "npm-package-release";
+
+export default new ReleaseWorkflow({
+  changelog: new IntrideaChangelog("CHANGELOG.md", { placeholder: "* Your contribution here." }),
+  project: new GitHubAction({ name: "example-action" }),
+  publisher: null,
+  floatingTags: ["major", "minor"],
+});
+```
+
+Moving tags is an explicit exception to the rule that release tags never move; it applies only to these two names, derived from the numeric released version. After the GitHub Release is created at the pushed and verified `vX.Y.Z` tag, the `floating-tags` step points each listed tag at the commit of that release tag (the build commit for a `GitHubAction`). Releasing `1.2.3` with `["major", "minor"]` creates or moves `v1` and `v1.2`; `v1.2.3` itself never moves, and the release tag push remains non-forced.
+
+A floating tag never moves backwards. When it already exists, the step reads the highest release tag in its line (`vX.*.*` for `vX`, `vX.Y.*` for `vX.Y`) at the same commit; a tag at a later release stays where it is, and the step fails without changes when no such release tag identifies the commit, so you can inspect it. For example, a maintenance release `1.0.4` after `1.1.0` moves `v1.0` and leaves `v1` at `1.1.0`. Tags already at the release commit are reused without a push. Moves use one atomic push with a lease on each tag's current value, so a concurrent change fails instead of being overwritten.
+
+`release.json` records the tags that point at the release as `floatingTags`, such as `["v1", "v1.2"]`, omitting tags kept at a later release. `npr verify` checks that each one points at this release or a later release in its line, since later releases move them. The option is validated when the workflow is constructed: it must be a nonempty list of distinct `"major"` and `"minor"` entries. Numeric release versions are never prereleases, so prerelease versions never move floating tags. `SemanticReleaseWorkflow` accepts the same option.
+
+Switching from `["major", "minor"]` to `["major"]` leaves existing `vX.Y` tags at their last release; say so in your own release documentation so that users of `vX.Y` know to update. Moving tags requires that no tag ruleset blocks updates to `vX` and `vX.Y`.
 
 ## JavaScript API
 
@@ -344,6 +369,6 @@ Release commits and tags require direct-push permission on the default branch. C
 
 Never blindly rerun publication. Inspect `release.json` (phase, identity, refs, integrity, verification, and error), retained archive, notes, and `release.bundle` (plus `next.bundle` when the development commit was prepared); then inspect registry metadata, remote refs, and hosted releases. A `publishing` phase can mean acceptance followed by a transport failure, so an error is not proof that npm rejected the upload. A published archive cannot be replaced.
 
-After inspection and explicit recovery authorization, rerun the affected operations from the intended checkout and inputs. Preparation reuses a matching tagged tree and reproducibly rebuilds the archive; publication compares both registry checksums before deciding whether an upload is missing. Diagnostic phase flags never skip work. Do not move release tags, overwrite evidence, or alter a build to hide a checksum mismatch. `npr verify --artifacts PATH` rechecks without mutation, even after the manifest advances. Existing artifact directories are reusable, but existing archive bytes must match. See [Recovery and Reconciliation](recovery.md) for input transport, advanced-checkout limits, and operator-managed recovery.
+After inspection and explicit recovery authorization, rerun the affected operations from the intended checkout and inputs. Preparation reuses a matching tagged tree and reproducibly rebuilds the archive; publication compares both registry checksums before deciding whether an upload is missing. Diagnostic phase flags never skip work. Do not move release tags (only configured [floating tags](#floating-tags) move), overwrite evidence, or alter a build to hide a checksum mismatch. `npr verify --artifacts PATH` rechecks without mutation, even after the manifest advances. Existing artifact directories are reusable, but existing archive bytes must match. See [Recovery and Reconciliation](recovery.md) for input transport, advanced-checkout limits, and operator-managed recovery.
 
 Visibility timeout records `verification: "unverified"` and “release could not be verified,” without blocking hosted-release creation or next-development preparation. A later verify command may confirm propagation. Authentication, network, malformed metadata, identity, and integrity failures remain errors. Registry visibility checks do not prove live OIDC configuration. Actions artifact preservation precedes publication, but retention expiry and local-only artifact loss still require operator planning.
