@@ -27,7 +27,8 @@ The GitHub execution provider carries the original source commit, manifest versi
 | Release preparation | Desired index tree equals the existing tagged tree: reuse the commit. | Commit a new release; a conflicting existing tree fails. |
 | Archive build | Rebuilt bytes match the existing archive: preserve it. | Retain a new archive; different existing bytes fail. |
 | npm publication | Both registry SHA-512 integrity and SHA-1 match: no upload. | Structured E404 permits one upload; missing/different checksums and other lookup errors fail closed. Skipped without a registry. |
-| Git release tag | Local/remote tag resolves to the intended commit: reuse it. | Create a missing matching tag; conflicting targets fail. |
+| Build commit | A `GitHubAction` rebuild of the release commit yields the tagged build commit: reuse it. | Create the build commit; different output conflicts with the existing archive or tag and fails. |
+| Git release tag | Local/remote tag resolves to the intended commit (the build commit for `GitHubAction`): reuse it. | Create a missing matching tag; conflicting targets fail. |
 | Git push | Remote branch contains the intended commit: do not rewind it. | Push missing refs with fast-forward/atomic safeguards; divergent work fails. |
 | GitHub Release | Title, notes, tag, status, and named asset SHA-256 match: no mutation. | Add a missing asset; conflicting metadata, duplicate assets, or unverifiable/different checksums fail. |
 | Next development | Matching immediate development commit/tree: validate and reuse it. | Prepare it from the release commit; unrelated/later local history fails. |
@@ -50,4 +51,4 @@ Inspect registry state, remote commits/tags, hosted outputs, the retained archiv
 
 Rerun the affected operations only after reviewing the intended checkout and inputs. A whole new dispatch is not a request to resume an old release: it uses a fresh checkout and fresh semantic analysis. An advanced development checkout, dirty tree, changed release input, non-reproducible build, conflicting remote output, or inaccessible registry requires inspection rather than automatic cleanup or rewind. Bundles are evidence for operator-managed Git recovery, not executable saved workflow state.
 
-`npr verify --artifacts PATH` reads the retained archive and explicit release identity without publishing or changing Git history, even after the manifest advances. When `release.json` records `registry: false`, it checks the archive and remote tag without a registry lookup. Never edit checksums or move tags to hide a mismatch.
+`npr verify --artifacts PATH` reads the retained archive and explicit release identity without publishing or changing Git history, even after the manifest advances. When `release.json` records `registry: false`, it checks the archive and remote tag without a registry lookup. When the archive records a build `commit`, the remote tag must point at that commit instead of the release commit. Never edit checksums or move tags to hide a mismatch.

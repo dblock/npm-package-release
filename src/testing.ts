@@ -160,6 +160,7 @@ const ownership = Symbol("release-test-project");
 
 export class ReleaseTestProject {
   readonly #directory: string;
+  readonly branch: string;
   readonly environment: Environment;
   readonly publisher: TestPublisher;
   readonly host: TestReleaseHost;
@@ -167,9 +168,10 @@ export class ReleaseTestProject {
   readonly options: ReleaseOptions;
   readonly services: Readonly<{ publisher: TestPublisher; host: TestReleaseHost; provider: LocalExecutionProvider }>;
 
-  private constructor(directory: string, token: symbol) {
+  private constructor(directory: string, token: symbol, branch = "master") {
     if (token !== ownership) throw new Error("Use ReleaseTestProject.create() for an owned temporary project.");
     this.#directory = directory;
+    this.branch = branch;
     this.environment = isolatedEnvironment(join(directory, "home"));
     this.publisher = new TestPublisher(join(directory, "registry"));
     this.host = new TestReleaseHost(join(directory, "hosting"));
@@ -185,14 +187,16 @@ export class ReleaseTestProject {
   get remote(): string { return join(this.#directory, "remote.git"); }
   get artifacts(): string { return join(this.#directory, "artifacts"); }
 
-  static async create(): Promise<ReleaseTestProject> {
-    const project = new ReleaseTestProject(await mkdtemp(join(tmpdir(), "npr-project-")), ownership);
+  static async create({ branch = "master" }: { readonly branch?: string } = {}): Promise<ReleaseTestProject> {
+    if (typeof branch !== "string" || !branch.trim() || branch.startsWith("-")) throw new Error("Invalid test default branch.");
+    const project = new ReleaseTestProject(await mkdtemp(join(tmpdir(), "npr-project-")), ownership, branch);
     try {
       await mkdir(project.cwd);
       await mkdir(join(project.directory, "home"));
       await writeFile(join(project.directory, "home", "gitconfig"), "");
-      await project.run("git", ["init", "--bare", "--initial-branch=master", project.remote]);
-      await project.git("init", "-b", "master");
+      await project.git("check-ref-format", "--branch", branch);
+      await project.run("git", ["init", "--bare", `--initial-branch=${branch}`, project.remote]);
+      await project.git("init", "-b", branch);
       await project.git("config", "user.name", "Release Fixture");
       await project.git("config", "user.email", "release-fixture@example.test");
       await project.git("config", "commit.gpgsign", "false");
@@ -252,8 +256,8 @@ export class ReleaseTestProject {
   async commit(message = "Prepare release fixture"): Promise<void> {
     await this.git("add", "--all", "--", ".");
     await this.git("commit", "-m", message);
-    await this.git("push", "-u", "origin", "master");
-    await this.git("remote", "set-head", "origin", "master");
+    await this.git("push", "-u", "origin", this.branch);
+    await this.git("remote", "set-head", "origin", this.branch);
   }
 
   async remoteFile(ref: string, path: string): Promise<string> {

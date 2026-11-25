@@ -73,7 +73,7 @@ Use [Lifecycle Hooks](hooks.md) to add ordered before/after behavior to either s
 | Service | Interface | Default |
 | --- | --- | --- |
 | `repository` | `ReleaseRepository` | `Git`, including trusted staging, concurrency guards, atomic release pushes, and ref verification. |
-| `project` | `PackageProject` | `NpmPackage`, including manifest/lockfile updates, packing, strict consumers, and archive checks; or [`ZipArchive`](usage.md#zip-archives) for a reproducible zip of a build directory. An optional `bind({ cwd, run, env })` returns a project for each invocation. |
+| `project` | `PackageProject` | `NpmPackage`, including manifest/lockfile updates, packing, strict consumers, and archive checks; [`ZipArchive`](usage.md#zip-archives) for a reproducible zip of a build directory; or [`GitHubAction`](usage.md#github-actions-releases) for a reproducible build commit tagged on top of the release commit. A project's artifact may set `commit` to the commit the release tag points at. An optional `bind({ cwd, run, env })` returns a project for each invocation. |
 | `publisher` | `PackagePublisher` | `NpmPackage`, including registry lookup, checksum reconciliation, and exact-archive publication, or `null` for [releases without a registry](usage.md#releases-without-a-registry). |
 | `changelog` | `Changelog` | `KeepAChangelog`; choose `IntrideaChangelog` or a custom class, or `null` to skip built-in notes. |
 | `versions` | `VersionPolicy` | `NumericPatchVersions`, selecting the requested/current version and the next patch. |

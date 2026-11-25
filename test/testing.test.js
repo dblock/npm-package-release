@@ -176,3 +176,17 @@ test("local publication adapters retain exact bytes, fail explicitly and reject 
   await mkdir(project.publisher.archive("@npr-test/directory", "0.1.0"), { recursive: true });
   await assert.rejects(project.publisher.view("@npr-test/directory", "0.1.0"));
 });
+
+test("test projects can use another default branch", async (t) => {
+  for (const branch of ["", "-main", 1, "bad..name"]) {
+    await assert.rejects(ReleaseTestProject.create({ branch }), /Invalid test default branch|check-ref-format/u);
+  }
+  const project = await ReleaseTestProject.create({ branch: "main" });
+  t.after(() => project.dispose());
+  assert.equal(project.branch, "main");
+  await project.write("README.md", "Main.\n");
+  await project.commit();
+  assert.equal(await project.remoteFile("main", "README.md"), "Main.\n");
+  assert.equal((await project.git("symbolic-ref", "refs/remotes/origin/HEAD")).trim(), "refs/remotes/origin/main");
+  assert.equal((await ReleaseTestProject.create().then(async (other) => { await other.dispose(); return other.branch; })), "master");
+});

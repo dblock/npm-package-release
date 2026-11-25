@@ -339,7 +339,7 @@ export class BuildArtifact implements Step<CommittedRelease, BuiltRelease> {
     await project.intact(store.directory, updated);
     await repository.clean();
     await repository.current(state.initialCommit, state.version);
-    await repository.tag(state.version);
+    await repository.tag(state.version, artifact.commit);
     await repository.bundle(join(store.directory, "release.bundle"), state.version);
     await writeFile(join(store.directory, "release-notes.md"), notes + "\n");
     return Object.freeze({ kind: "built", runtime, release, state: await runtime.report(updated, "built") });
@@ -365,7 +365,7 @@ export class PushRelease implements Step<PublishedRelease, PushedRelease> {
   readonly id = "push";
   async run(input: PublishedRelease): Promise<PushedRelease> {
     const { runtime, state } = input;
-    await runtime.services.repository.push(state.releaseCommit, state.version);
+    await runtime.services.repository.push(state.releaseCommit, state.version, state.artifact.commit);
     return Object.freeze({ ...input, kind: "pushed", state: await runtime.report(state, "pushed") });
   }
 }
@@ -442,7 +442,11 @@ export async function verifyRetained(
     if (!state.artifact) throw new Error("Missing retained archive.");
     await services.project.intact(services.store.directory, { ...state, artifact: state.artifact });
     if (!state.releaseCommit || !/^[a-f0-9]{40,64}$/u.test(state.releaseCommit)) throw new Error("Missing release commit identity.");
-    await services.repository.verifyTag(state.version, state.releaseCommit);
+    const { commit } = state.artifact;
+    if (commit !== undefined && (typeof commit !== "string" || !/^[a-f0-9]{40,64}$/u.test(commit))) {
+      throw new Error("Invalid retained build commit identity.");
+    }
+    await services.repository.verifyTag(state.version, commit ?? state.releaseCommit);
     log(`[npr] verifying: ${state.name}@${state.version}`);
     const registry = state.registry !== false;
     if (registry && !services.verifier) throw new Error("Registry verification requires a verifier.");

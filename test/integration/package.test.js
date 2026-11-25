@@ -104,7 +104,7 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   await checkSelfRelease(t, join(consumer, "node_modules/npm-package-release"));
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection, GeneratedChangelog, ZipArchive } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection, GeneratedChangelog, ZipArchive, GitHubAction } from "npm-package-release";
 import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, LifecycleHook, LifecycleContext } from "npm-package-release";
 import { ReleaseTestProject, TestPublisher, TestReleaseHost } from "npm-package-release/testing";
 export async function commitContract(repository: import("npm-package-release").ReleaseRepository, tree: string) {
@@ -209,6 +209,10 @@ new ReleaseWorkflow({
   project: new ZipArchive({ build: ["npm", "run", "build"], directory: "build", name: "extension" }), publisher: null,
   versionReferences: { "public/manifest.json": [/"version": "(?<version>[^"]+)"/u] },
 });
+new ReleaseWorkflow({ project: new GitHubAction({ output: ["dist"], name: "example-action" }), publisher: null });
+export async function actionBranch() { return (await ReleaseTestProject.create({ branch: "main" })).branch; }
+// @ts-expect-error GitHub Action builds run an argument array without a shell.
+new GitHubAction({ build: "npm run build" });
 // @ts-expect-error Releases without a registry cannot verify registry visibility.
 String(new ReleaseWorkflow({ publisher: null }).prepare().then((built) => built.runtime.services.verifier.options));
 `);
@@ -228,6 +232,18 @@ String(new ReleaseWorkflow({ publisher: null }).prepare().then((built) => built.
   const zipped = await new installedApi.ZipArchive({ build: [process.execPath, "-e", ""], cwd: extension,
     env: { SOURCE_DATE_EPOCH: "0" } }).pack(extension, { name: "extension", version: "1.0.0" });
   assert.equal(zipped.filename, "extension-v1.0.0.zip");
+  const action = await installedTestingApi.ReleaseTestProject.create({ branch: "main" });
+  t.after(() => action.dispose());
+  await action.write(".gitignore", "dist\n");
+  await action.write("package.json", JSON.stringify({ name: "example-action", version: "1.0.0", private: true }));
+  await action.write("action.yml", "runs:\n  using: node24\n  main: dist/index.js\n");
+  await action.commit();
+  const built = await new installedApi.GitHubAction({
+    build: [process.execPath, "-e", 'require("fs").mkdirSync("dist");require("fs").writeFileSync("dist/index.js","")'],
+  }).bind({ cwd: action.cwd, run: action.run, env: action.environment }).pack(action.directory, { name: "example-action", version: "1.0.0" });
+  assert.equal(built.filename, "example-action-v1.0.0.zip");
+  assert.equal((await action.git("show", "-s", "--format=%P %s", built.commit)).trim(),
+    `${(await action.git("rev-parse", "HEAD")).trim()} ${installedApi.buildCommitMessage("1.0.0")}`);
   const { NpmPackage } = installedApi;
   const publicRegistry = new NpmPackage(consumer, (program, args, options) =>
     command(program, args, { cwd: consumer, ...options }));

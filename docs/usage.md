@@ -2,7 +2,7 @@
 
 ## Requirements
 
-The default workflow uses one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Built-in services do not support alternate registries, prerelease versions/channels, or workspace publication; [custom workflows](workflows.md) can supply their own classes and contracts. A project that is not published to a registry can [release only as a GitHub Release](#releases-without-a-registry).
+The default workflow uses one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Built-in services do not support alternate registries, prerelease versions/channels, or workspace publication; [custom workflows](workflows.md) can supply their own classes and contracts. A project that is not published to a registry can [release only as a GitHub Release](#releases-without-a-registry), including [JavaScript GitHub Actions](#github-actions-releases).
 
 Install `npm-package-release@0.2.0` as an exact development dependency and commit the lockfile. The CLI is `npr`, not the unrelated npm package of that name. Upgrade the dependency and pinned workflow/action together.
 
@@ -250,6 +250,69 @@ Install `npm-package-release@0.2.0` as an exact development dependency, set the 
 Archives are byte-reproducible: entries are sorted by path, every entry is a deflated file with mode `0644` and the `SOURCE_DATE_EPOCH` timestamp (as a DOS time in UTC, no earlier than 1980), and there are no directory entries, extra fields, or comments. Compression uses the zlib built into Node.js, so rebuild with the same Node.js version to reproduce the same bytes; the reusable workflow does so for prepare and release. The build directory must contain at least one file and no empty directories, Git metadata, sockets, or similar files. Symbolic links to files inside the directory are stored as regular files; links that escape it, dangle, or point to directories fail.
 
 Instead of installing an npm package, the artifact check reads the zip, verifies every entry's checksum, requires its files and contents to match the built directory exactly, extracts it into a temporary directory, and passes that directory to `validateArtifact` as `consumer`. Recovery and `npr verify` compare the retained zip's SHA-512 `integrity` and SHA-1 `shasum` like an npm tarball; `npr verify` recognizes a retained `.zip` and checks it without a build. Projects can implement the optional `bind({ cwd, run, env })` method, as `ZipArchive` does, to receive each invocation's directory, command runner, and environment.
+
+## GitHub Actions Releases
+
+`GitHubAction` is a project that releases a JavaScript GitHub Action whose runnable code is build output, such as an `ncc` bundle in a gitignored `dist/`. Actions run from a Git ref, so the shipped artifact is a commit: each release adds a *build commit* on top of the release commit and tags it, while the default branch keeps only source. Combine it with `publisher: null` and a GitHub Release. For example, `npr.config.js` for a private action with an `action.yml` whose `runs.main` is `dist/index.js`, an Intridea changelog using `### 1.0.0 (Next)` headings and `*` bullets, and a `main` default branch:
+
+```js
+import { GitHubAction, IntrideaChangelog, ReleaseWorkflow } from "npm-package-release";
+
+export default new ReleaseWorkflow({
+  changelog: new IntrideaChangelog("CHANGELOG.md", { placeholder: "* Your contribution here." }),
+  project: new GitHubAction({ build: ["npm", "run", "build"], output: ["dist"], name: "example-action" }),
+  publisher: null,
+});
+```
+
+Its caller `.github/workflows/release.yml`:
+
+```yaml
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional numeric release version.
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    name: Release Action
+    uses: dblock/npm-package-release/.github/workflows/release.yml@v0.2.0
+    with:
+      version: ${{ inputs.version }}
+```
+
+Install `npm-package-release@0.2.0` as an exact development dependency, set the HTTPS GitHub `repository` URL in `package.json` (or pass `host: new GitHubReleaseHost(run, "owner/repo")`), keep the build output in `.gitignore`, and create the `release` environment and direct-push branch rules from [New Project Setup](#2-configure-github) for your actual default branch. No npm setup is needed. Dispatching the workflow from `main` releases `1.0.0`:
+
+1. Run `npm test` and `npm run lint`, set the version in `package.json` and `package-lock.json`, date `### 1.0.0 (Next)`, and commit `Prepare release 1.0.0` on `main`.
+2. Run the build, then create the build commit `Build release 1.0.0`: its only parent is the release commit and its tree is the release tree plus every file in `output`, added even though they are ignored. `action.yml` is unchanged.
+3. Zip `action.yml` and the build output as `example-action-v1.0.0.zip`, check that zip against the build commit, and pass its extracted files to `validateArtifact` as `consumer`, where the entry point can run.
+4. Tag `v1.0.0` at the build commit and atomically push `main` (the release commit) and the tag, without force. The branch never contains the build commit.
+5. Create the `v1.0.0` GitHub Release with the zip attached, then commit `Prepare next development iteration, 1.0.1` on top of the release commit with a new `### 1.0.1 (Next)` section and push `main`.
+
+Workflows reference the action as `owner/example@v1.0.0`. Release tags are never moved.
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `build` | `["npm", "run", "build"]` | Program and arguments run without a shell from the repository root, with the release environment including `SOURCE_DATE_EPOCH`, each time the build commit is created. |
+| `output` | `["dist"]` | Relative paths that do not overlap, with `/` separators, added to the build commit. They must be ignored and untracked in the release commit, exist after the build, and contain only regular files. |
+| `name` | Package name, with a scope's `@` removed and `/` replaced by `-` | Filename prefix; the archive is `NAME-vVERSION.zip`, matching the `vVERSION` release tag. |
+
+The release commit must contain exactly one `action.yml` or `action.yaml` declaring `runs.using: nodeNN` and `runs.main`. `runs.main` and the optional `runs.pre` and `runs.post` must name files in the build output; a missing entry point fails before tagging. Composite and Docker actions are not supported. `GitHubAction` reads `package.json` like `ZipArchive`, allowing `"private": true` and rejecting workspaces.
+
+The build commit is reproducible: its author, committer, and both dates come from the release commit (using its committer date), its message is fixed, and it is not signed, so preparation, release, and any later rebuild of the same release commit with the same output produce the same commit. The zip uses the same deterministic format as [`ZipArchive`](#zip-archives), timestamped with the committer date of the release commit. The build must also be deterministic: install locked dependencies and use the same Node.js version, as the reusable workflow does for prepare and release.
+
+Reruns reconcile outputs like other releases. A release tag at a build commit identifies its parent as the release commit, so a matching rerun reuses the release commit, recreates the same build commit, and reuses the tag, push, and hosted release. A build that produces different output conflicts with the existing archive or tag and fails; tags are never overwritten. `release.json` records the build commit as `artifact.commit`, and `npr verify` checks the retained zip and that the remote `vVERSION` tag points at that commit. `SemanticReleaseWorkflow` rejects `GitHubAction`, since its release tags are not reachable from the default branch history.
+
+To migrate from a workflow that builds and moves tags when a GitHub Release is published, remove that workflow and its scripts: a release created with the Actions token does not trigger other workflows, and the tag already points at the build commit. This tool does not publish releases to GitHub Marketplace.
 
 ## JavaScript API
 

@@ -15,6 +15,9 @@ export async function testingContracts() {
   await project.write("nested/file.txt", "Fixture.");
   await workflow.prepare({ ...project.options, version: "0.2.0" });
   await project.dispose();
+  (await ReleaseTestProject.create({ branch: "main" })).branch satisfies string;
+  // @ts-expect-error Default branches are names.
+  await ReleaseTestProject.create({ branch: 1 });
   // @ts-expect-error File selections must be glob strings or arrays.
   await project.copyFiles(".", 123);
   // @ts-expect-error Omit the list for recursion rather than passing null.

@@ -19,6 +19,8 @@ export interface Artifact {
   readonly filename: string;
   readonly integrity: string;
   readonly shasum: string;
+  /** Commit the release tag points at instead of the release commit, when the shipped artifact is a Git commit. */
+  readonly commit?: string;
 }
 export interface PackageManifest extends ReleaseIdentity {
   repository?: { url?: string };
@@ -115,7 +117,7 @@ export interface ReleaseRepository {
   nextIteration(releaseCommit: string, nextVersion: string): Promise<{ readonly commit: string; readonly tree: string } | null>;
   tag(version: string, commit?: string): Promise<void>;
   bundle(path: string, version: string): Promise<void>;
-  push(commit: string, version?: string): Promise<void>;
+  push(commit: string, version?: string, tagCommit?: string): Promise<void>;
   verifyTag(version: string, commit: string): Promise<void>;
 }
 export interface ProjectContext {

@@ -31,13 +31,13 @@ See the [complete lifecycle example](../examples/lifecycle-hooks/README.md) and 
 
 ## Project API
 
-`ReleaseTestProject.create()` creates an owned temporary directory with `cwd`, bare `remote`, and private `artifacts` paths. Call `dispose()` from your test framework's cleanup hook, including when a test fails. The factory removes its directory if initialization fails; cleanup never targets the caller's checkout.
+`ReleaseTestProject.create({ branch })` creates an owned temporary directory with `cwd`, bare `remote`, and private `artifacts` paths. Call `dispose()` from your test framework's cleanup hook, including when a test fails. The factory removes its directory if initialization fails; cleanup never targets the caller's checkout.
 
 | Member | Behavior |
 | --- | --- |
 | `write(path, content)` | Write a relative text file inside the fixture, creating parent directories. |
 | `copyFiles(root, selection?)` | Copy all files recursively, a glob's matches, or an exact list of relative files, preserving nested paths, bytes, and permission bits. |
-| `commit(message?)` | Commit fixture changes and push them to the local `master` branch. |
+| `commit(message?)` | Commit fixture changes and push them to the local default branch, `master` unless `create({ branch })` selects another, such as `main`. |
 | `git(...args)` | Run real Git commands in the fixture. |
 | `remoteFile(ref, path)` | Read a file from a tag or branch in the bare remote. |
 | `run(program, args, options?)` | Run an argument-based command with the fixture's isolated environment. |
@@ -67,7 +67,7 @@ Child commands retain runtime paths and platform essentials, but clear inherited
 
 `project.publisher` is a `TestPublisher`; `project.host` is a `TestReleaseHost`. They copy the exact archive into their respective local directories and never call npm publication or GitHub APIs. Publisher metadata comes from the retained archive with its real SHA-512/SHA-1 checksums. Repetition accepts identical bytes and rejects conflicts without overwriting existing files.
 
-Use `publisher.archive(name, version)` or `host.archive(name, version)` to inspect retained bytes. The host checks archive identity and that the supplied notes file exists, but does not model GitHub release metadata or assets beyond the archive. Both adapters read the manifest embedded in an npm tarball; for a `ZipArchive` release, pass a `GitHubReleaseHost` with a command runner that simulates `gh`, as in this repository's zip release test. Keep live hosting/authentication tests separate.
+Use `publisher.archive(name, version)` or `host.archive(name, version)` to inspect retained bytes. The host checks archive identity and that the supplied notes file exists, but does not model GitHub release metadata or assets beyond the archive. Both adapters read the manifest embedded in an npm tarball; for a `ZipArchive` or `GitHubAction` release, pass a `GitHubReleaseHost` with a command runner that simulates `gh`, as in this repository's zip and action release tests. Keep live hosting/authentication tests separate.
 
 For a failure case, supply a new class instance to the same builder:
 
