@@ -33,7 +33,7 @@ const UNIX = 3 << 8;
 const FILE_MODE = 0o100644;
 const MAX_UINT32 = 0xffffffff;
 
-function relativePath(path: string, option: string): string {
+export function relativePath(path: string, option: string): string {
   if (typeof path !== "string" || !path || path.includes("\0") || path.includes("\\") || isAbsolute(path) ||
     win32.isAbsolute(path) || path.split("/").some((part) => part === ".." || part === "." || part === "" ||
       part.toLowerCase() === ".git")) {
@@ -190,7 +190,7 @@ export async function directoryEntries(root: string): Promise<ZipEntry[]> {
   return entries.sort((left, right) => Buffer.compare(Buffer.from(left.path), Buffer.from(right.path)));
 }
 
-function artifact(filename: string, bytes: Uint8Array): Artifact {
+export function zipArtifact(filename: string, bytes: Uint8Array): Artifact {
   return Object.freeze({
     filename,
     integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
@@ -270,21 +270,8 @@ export class ZipArchive implements PackageProject {
     await this.run(program, args, { cwd: this.cwd });
     const bytes = createZip(await this.built(), this.epoch());
     const filename = this.filename(identity);
-    const target = join(directory, filename);
-    let existing: Buffer | undefined;
-    try { existing = await readFile(target); } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    if (existing) {
-      if (Buffer.compare(existing, bytes) !== 0) throw new Error("Existing archive differs from the reproducible build.");
-    } else {
-      const temporary = await mkdtemp(join(directory, ".npr-zip-"));
-      try {
-        await writeFile(join(temporary, filename), bytes);
-        await copyFile(join(temporary, filename), target, constants.COPYFILE_EXCL);
-      } finally { await rm(temporary, { recursive: true, force: true }); }
-    }
-    return artifact(filename, bytes);
+    await writeArchive(directory, filename, bytes);
+    return zipArtifact(filename, bytes);
   }
 
   async consumer(archive: string, check: (consumer: string) => Promise<void>): Promise<void> {
@@ -294,29 +281,54 @@ export class ZipArchive implements PackageProject {
       path !== built[index].path || Buffer.compare(content, built[index].content) !== 0)) {
       throw new Error("ZIP archive entries differ from the built directory.");
     }
-    const consumer = await mkdtemp(join(tmpdir(), "npr-consumer-"));
-    try {
-      for (const { path, content } of entries) {
-        const destination = join(consumer, ...path.split("/"));
-        await mkdir(dirname(destination), { recursive: true });
-        await writeFile(destination, content);
-      }
-      await check(consumer);
-    } finally {
-      await rm(consumer, { recursive: true, force: true });
-    }
+    await extractZip(entries, check);
   }
 
   async intact(directory: string, state: ReleaseIdentity & { readonly artifact: Artifact }): Promise<void> {
-    const { filename } = state.artifact;
-    if (typeof filename !== "string" || basename(filename) !== filename || !filename.endsWith(".zip")) {
-      throw new Error("Invalid retained archive filename.");
+    await retainedZip(directory, state.artifact);
+  }
+}
+
+export async function retainedZip(directory: string, retained: Artifact): Promise<void> {
+  const { filename } = retained;
+  if (typeof filename !== "string" || basename(filename) !== filename || !filename.endsWith(".zip")) {
+    throw new Error("Invalid retained archive filename.");
+  }
+  const bytes = await readFile(join(directory, filename));
+  readZip(bytes);
+  const actual = zipArtifact(filename, bytes);
+  if (actual.integrity !== retained.integrity || actual.shasum !== retained.shasum) {
+    throw new Error("Retained archive integrity mismatch.");
+  }
+}
+
+export async function writeArchive(directory: string, filename: string, bytes: Uint8Array): Promise<void> {
+  const target = join(directory, filename);
+  let existing: Buffer | undefined;
+  try { existing = await readFile(target); } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  if (existing) {
+    if (Buffer.compare(existing, bytes) !== 0) throw new Error("Existing archive differs from the reproducible build.");
+    return;
+  }
+  const temporary = await mkdtemp(join(directory, ".npr-zip-"));
+  try {
+    await writeFile(join(temporary, filename), bytes);
+    await copyFile(join(temporary, filename), target, constants.COPYFILE_EXCL);
+  } finally { await rm(temporary, { recursive: true, force: true }); }
+}
+
+export async function extractZip(entries: readonly ZipEntry[], check: (consumer: string) => Promise<void>): Promise<void> {
+  const consumer = await mkdtemp(join(tmpdir(), "npr-consumer-"));
+  try {
+    for (const { path, content } of entries) {
+      const destination = join(consumer, ...path.split("/"));
+      await mkdir(dirname(destination), { recursive: true });
+      await writeFile(destination, content);
     }
-    const bytes = await readFile(join(directory, filename));
-    readZip(bytes);
-    const actual = artifact(filename, bytes);
-    if (actual.integrity !== state.artifact.integrity || actual.shasum !== state.artifact.shasum) {
-      throw new Error("Retained archive integrity mismatch.");
-    }
+    await check(consumer);
+  } finally {
+    await rm(consumer, { recursive: true, force: true });
   }
 }

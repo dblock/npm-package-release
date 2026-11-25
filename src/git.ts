@@ -1,6 +1,11 @@
 import { numericVersion } from "./command.js";
 import type { Command, ReleaseRepository } from "./contracts.js";
 
+/** Subject of the commit that adds build output on top of a release commit, such as a GitHub Action's. */
+export function buildCommitMessage(version: string): string {
+  return `Build release ${numericVersion(version)}`;
+}
+
 export class Git implements ReleaseRepository {
   readonly run: (...args: string[]) => Promise<string>;
   branch: string;
@@ -149,9 +154,16 @@ export class Git implements ReleaseRepository {
     if (local && remote && local !== remote) throw new Error("Release tag points at another commit.");
     if (!local && remote) {
       await this.run("fetch", "--no-tags", this.remote, `refs/tags/v${version}`);
-      return (await this.run("rev-parse", "FETCH_HEAD^{commit}")).trim();
+      return this.releaseOf((await this.run("rev-parse", "FETCH_HEAD^{commit}")).trim(), version);
     }
-    return local;
+    return local && this.releaseOf(local, version);
+  }
+
+  // A tag on a build commit identifies the release commit it was built from: its only parent.
+  private async releaseOf(commit: string, version: string): Promise<string> {
+    const [parents, subject] = (await this.run("show", "-s", "--format=%P%n%s", commit)).split("\n");
+    const parent = parents.trim().split(/\s+/u);
+    return parent.length === 1 && parent[0] && subject === buildCommitMessage(version) ? parent[0] : commit;
   }
 
   async tag(version: string, commit?: string) {
@@ -170,12 +182,12 @@ export class Git implements ReleaseRepository {
     await this.verify(null, version, commit);
   }
 
-  async push(commit: string, version?: string) {
+  async push(commit: string, version?: string, tagCommit = commit) {
     const remote = await this.remoteHead();
     const alreadyPushed = await this.ancestor(commit, remote);
     if (!alreadyPushed && !await this.ancestor(remote, commit)) throw new Error("Remote branch advanced; refusing to overwrite it.");
     const tag = version ? await this.remoteTag(version) : null;
-    if (version && (await this.tagCommit(version) !== commit || (tag && tag !== commit))) {
+    if (version && (await this.tagCommit(version) !== tagCommit || (tag && tag !== tagCommit))) {
       throw new Error("Release tag points at another commit.");
     }
     const refs = [
@@ -183,7 +195,7 @@ export class Git implements ReleaseRepository {
       ...(version && !tag ? [`refs/tags/v${version}`] : []),
     ];
     if (refs.length) await this.run("push", ...(version ? ["--atomic"] : []), this.remote, ...refs);
-    await this.verify(commit, version);
+    await this.verify(commit, version, tagCommit);
   }
 
   async verify(commit: string | null, version?: string, tagCommit = commit) {

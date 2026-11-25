@@ -18,10 +18,12 @@ export { ExecutionContext, LocalExecutionProvider, GitHubExecutionProvider, curr
 export type {
   ExecutionProvider, ExecutionAttributes, ExecutionStep, StepHistory, StepOutcome, ExecutionRun, WorkflowDescription,
 } from "./execution.js";
-export { Git } from "./git.js";
+export { Git, buildCommitMessage } from "./git.js";
 export { NpmPackage } from "./package.js";
 export { ZipArchive } from "./zip.js";
-export type { ZipArchiveOptions } from "./zip.js";
+export type { ZipArchiveOptions, ZipEntry } from "./zip.js";
+export { GitHubAction, actionEntryPoints } from "./action.js";
+export type { GitHubActionOptions, ActionBuild } from "./action.js";
 export {
   NumericPatchVersions, MarkdownChangelog, KeepAChangelog, IntrideaChangelog,
   GitHubReleaseHost, HookValidator, DirectoryReleaseStore, RegistryVisibility,

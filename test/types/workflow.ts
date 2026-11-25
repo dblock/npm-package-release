@@ -3,7 +3,7 @@ import {
   PublishArtifact, release, ReleaseWorkflow,
   LocalExecutionProvider, prepare,
   SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator,
-  LifecycleHooks, MarkdownSection, GeneratedChangelog, ZipArchive,
+  LifecycleHooks, MarkdownSection, GeneratedChangelog, ZipArchive, GitHubAction, actionEntryPoints, buildCommitMessage,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
@@ -205,3 +205,14 @@ new ReleaseWorkflow({
 new ZipArchive().bind({ cwd: ".", run: async () => "", env: {} }) satisfies PackageProject;
 // @ts-expect-error Builds run an argument array without a shell.
 new ZipArchive({ build: "npm run build" });
+new ReleaseWorkflow({ project: new GitHubAction({ build: ["npm", "run", "build"], output: ["dist"], name: "example-action" }), publisher: null });
+new GitHubAction().bind({ cwd: ".", run: async () => "", env: {} }) satisfies PackageProject;
+export async function actionContracts(action: GitHubAction, artifact: BuiltRelease["state"]["artifact"]) {
+  const build = await action.commit("1.0.0");
+  build.commit satisfies string;
+  artifact.commit satisfies string | undefined;
+  actionEntryPoints("runs:\n  using: node24\n  main: dist/index.js\n") satisfies string[];
+  buildCommitMessage("1.0.0") satisfies string;
+  // @ts-expect-error Build output is a list of paths.
+  new GitHubAction({ output: "dist" });
+}

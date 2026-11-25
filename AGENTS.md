@@ -1,6 +1,6 @@
 # Working on npm-package-release
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) and [DESIGN.md](DESIGN.md) before making changes. This package ports reusable npm release operations from `ruby-gem-release`; it is not a general release service. npm is the default registry; `publisher: null` supports releases whose GitHub Release is their only destination, such as `ZipArchive` build directories. Keep zips byte-reproducible with built-in zlib and no new runtime dependency. Defer workspaces, alternate registries/hosts, and prerelease channels. See [Detailed Usage](docs/usage.md) for the actual CLI/API, hooks, and recovery contract.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [DESIGN.md](DESIGN.md) before making changes. This package ports reusable npm release operations from `ruby-gem-release`; it is not a general release service. npm is the default registry; `publisher: null` supports releases whose GitHub Release is their only destination, such as `ZipArchive` build directories and `GitHubAction` build commits. Keep zips byte-reproducible with built-in zlib; `yaml` parses action metadata. Tag a `GitHubAction` release at a reproducible build commit (fixed message, release-commit identity/date, unsigned) whose only parent is the release commit, push only source commits to the branch, and never overwrite a conflicting build tag. Defer workspaces, alternate registries/hosts, and prerelease channels. See [Detailed Usage](docs/usage.md) for the actual CLI/API, hooks, and recovery contract.
 
 ## Implementation and Validation
 

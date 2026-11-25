@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { command } from "./command.js";
 import { generatedChangelog } from "./changelog.js";
 import { Workflow } from "./workflow.js";
+import { GitHubAction } from "./action.js";
 import { prepareRelease, finishRelease } from "./release.js";
 import { lifecycleOptions } from "./lifecycle.js";
 import { snapshot } from "./services.js";
@@ -110,6 +111,9 @@ export class SemanticReleaseWorkflow implements Step<ReleaseOptions, ReleaseStat
 
   constructor(config: SemanticReleaseConfig = {}) {
     validateDestinations(config);
+    if (config.project instanceof GitHubAction) {
+      throw new Error("SemanticReleaseWorkflow does not support GitHubAction: its release tags are not on the default branch history.");
+    }
     config = Object.freeze({ ...config, ...referenceOptions(config) });
     this.config = config;
     const nextDevelopment = config.nextDevelopment ?? false;
