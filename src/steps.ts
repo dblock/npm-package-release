@@ -7,6 +7,7 @@ import { Git } from "./git.js";
 import { NpmPackage } from "./package.js";
 import { Release } from "./release-description.js";
 import { lifecycleFor } from "./lifecycle.js";
+import { updateReferences, versionReferences } from "./references.js";
 import type { LifecycleInvocation, LifecycleFailure } from "./lifecycle.js";
 import { currentExecutionProvider } from "./execution.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
@@ -139,6 +140,26 @@ function validateConfig(config: ReleaseConfig): void {
     if (config[hook] !== undefined && typeof config[hook] !== "function") throw new Error(`${hook} must be a function.`);
   }
   validateDestinations(config);
+  referenceOptions(config);
+}
+
+export function referenceOptions(config: ReleaseConfig): Pick<ReleaseConfig, "versionReferences" | "releaseReferences"> {
+  if (!config || typeof config !== "object") return {};
+  const options: { versionReferences?: ReleaseConfig["versionReferences"]; releaseReferences?: ReleaseConfig["releaseReferences"] } = {};
+  for (const option of ["versionReferences", "releaseReferences"] as const) {
+    const references = versionReferences(config[option], option);
+    if (references) options[option] = references;
+  }
+  return options;
+}
+
+function updateVersionReferences(runtime: ReleaseRuntime, phase: string, version: string,
+  execution?: ExecutionContext): Promise<void> {
+  const { versionReferences: references, releaseReferences } = runtime.config;
+  return updateReferences([
+    { references, version, option: "versionReferences" },
+    { references: releaseReferences, version: runtime.identity.version, option: "releaseReferences" },
+  ], runtime.cwd, runtime.hook(phase, execution).run);
 }
 
 export function validateDestinations(config: ReleaseConfig): void {
@@ -262,6 +283,7 @@ export class PrepareRelease implements Step<InitializedRelease, PreparedRelease>
       const before = runtime.hook("prepare", execution);
       await runtime.lifecycle?.invoke("prepare", "before", before, before.execution);
       await project.setVersion(state.version);
+      await updateVersionReferences(runtime, "prepare", state.version, execution);
       notes = await changelog?.release({ ...input.release, cwd: runtime.cwd }) || "";
       await runtime.config.prepare?.(runtime.hook("prepare", execution?.withRelease(input.release.withNotes(notes))));
       const after = runtime.hook("prepare", execution?.withRelease(input.release.withNotes(notes)));
@@ -377,6 +399,7 @@ export class PrepareNextVersion implements Step<HostedRelease | PushedRelease, N
         const context = runtime.hook("next", execution);
         await runtime.lifecycle?.invoke("next", "before", context, context.execution);
         await project.setVersion(state.nextVersion);
+        await updateVersionReferences(runtime, "next", state.nextVersion, execution);
         await changelog?.next({ version: state.nextVersion, releasedVersion: state.version, cwd: runtime.cwd });
         await runtime.config.next?.(runtime.hook("next", execution));
         await runtime.lifecycle?.invoke("next", "after", context, context.execution);

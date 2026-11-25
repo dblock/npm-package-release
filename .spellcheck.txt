@@ -19,3 +19,4 @@ republishing
 svg
 wordmark
 worktrees
+UTF

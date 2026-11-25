@@ -10,7 +10,7 @@ import { snapshot } from "./services.js";
 import { GitHistory, SemanticRelease, SemanticDecision, semanticPlan } from "./semantic.js";
 import {
   InitializeRelease, PrepareRelease,
-  ReleaseRuntime, ReleaseObserver, scopedCommand, validateDestinations,
+  ReleaseRuntime, ReleaseObserver, referenceOptions, scopedCommand, validateDestinations,
 } from "./steps.js";
 import type { Step } from "./workflow.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
@@ -110,7 +110,7 @@ export class SemanticReleaseWorkflow implements Step<ReleaseOptions, ReleaseStat
 
   constructor(config: SemanticReleaseConfig = {}) {
     validateDestinations(config);
-    config = Object.freeze({ ...config });
+    config = Object.freeze({ ...config, ...referenceOptions(config) });
     this.config = config;
     const nextDevelopment = config.nextDevelopment ?? false;
     this.preparation = prepareRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)

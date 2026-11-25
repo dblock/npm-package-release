@@ -15,7 +15,7 @@ import {
 import {
   InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, PublishArtifact,
   PushRelease, CreateHostedRelease, PrepareNextVersion, VerifyRelease, ReleaseObserver,
-  artifactDirectory, scopedCommand, validateDestinations, verifyRetained,
+  artifactDirectory, referenceOptions, scopedCommand, validateDestinations, verifyRetained,
 } from "./steps.js";
 import type { BuiltRelease, PreparedRelease } from "./steps.js";
 
@@ -35,7 +35,7 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
 
   constructor(private readonly config: ReleaseConfig = {}) {
     validateDestinations(config);
-    config = Object.freeze({ ...config });
+    config = Object.freeze({ ...config, ...referenceOptions(config) });
     this.config = config;
     this.preparation = prepareRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
       .then(new InitializeRelease(config))

@@ -130,6 +130,8 @@ Replace `example` with the package's public API and check its actual behavior. T
 | `repository` | `Git` | A `ReleaseRepository` instance; default Git uses `branch`/`remote`. |
 | `host` | `GitHubReleaseHost` | A `ReleaseHost` instance or `null` to disable hosting. Default GitHub owner/repository comes from the manifest's HTTPS repository URL. |
 | `timezone` | `NPR_TIMEZONE` or `UTC` | Named timezone for calendar dates and command/Git timestamps. |
+| `versionReferences` | None | Files or globs mapped to regular expressions whose `version` group follows the package version in the release and next-development commits; see [Version References](#version-references). |
+| `releaseReferences` | None | Files or globs mapped to regular expressions whose `version` group is set to the released version in both commits; see [Version References](#version-references). |
 | `prepare` | No additional edits | Trusted release edits after version/changelog preparation. |
 | `validator` | `new HookValidator()` | A `ReleaseValidator` instance. `HookValidator({ validate, validateArtifact })` adapts optional checks; default validation runs npm tests/lint for release and next-development files. |
 | `next` | No additional edits | Trusted next-development edits after the patch increment. |
@@ -143,6 +145,32 @@ Hooks receive a frozen context with `cwd`, `version`, `releasedVersion`, `previo
 Hooks also receive `execution`, a provider-neutral immutable snapshot with release data, the logical step, observed history, and allowlisted run metadata. A configuration `observer` class supplies structured success/failure notifications, including failures before initialization. See [Execution Providers and Contexts](execution.md).
 
 For the default `KeepAChangelog`, use `## [Unreleased]` with real notes; releases use `## [0.1.0] - YYYY-MM-DD`. Standard `[Unreleased]: https://github.com/owner/repo/compare/v0.0.1...master` links are updated without rewriting unrelated Markdown. `new IntrideaChangelog()` instead uses `## 0.1.0 (Next)` with real notes and at least one `- Your contribution here.` placeholder; releases use `## 0.1.0 (YYYY/MM/DD)`. See [Changelog Templates](changelogs.md) for optional prompts/category templates and categorized Intridea sections. Empty sections fail before publication. Custom `Changelog.release`/`next` methods receive the invocation's `cwd` alongside version/date data.
+
+## Version References
+
+`versionReferences` and `releaseReferences` keep other files in step with the package version. Each maps a file path or glob to an array of regular expressions, and each expression must capture the version in a named group `version`:
+
+```js
+import { ReleaseWorkflow } from "npm-package-release";
+
+export default new ReleaseWorkflow({
+  versionReferences: {
+    "public/manifest.json": [/"version": "(?<version>\d+\.\d+\.\d+)"/u],
+  },
+  releaseReferences: {
+    "README.md": [/npm install example@(?<version>\d+\.\d+\.\d+)/u],
+    "docs/**/*.md": [/example@(?<version>\d+\.\d+\.\d+)(?![\w.+-])/u],
+  },
+});
+```
+
+`versionReferences` follow the package version: the release commit gets the released version and the next-development commit gets the next version, as for a browser extension's `manifest.json`. `releaseReferences` are set to the released version in both commits, as for install snippets that should always name a published version. `SemanticReleaseWorkflow` accepts both options; without next-development preparation only the release commit is updated.
+
+Paths are relative to the repository root and use `/` separators on every platform. A path with glob characters (`*`, `?`, `[...]`, `{a,b}`) matches tracked files, including hidden files, and may match nothing. A literal path must name an existing regular file inside the repository. Absolute paths, `..`, backslashes, and `.git` paths are rejected. A file selected by several entries gets all their patterns in order, `versionReferences` first.
+
+Every pattern replaces each of its matches and must match at least once in every file it selects. Only the `version` captures change; other bytes, including line endings, are preserved. Files must be UTF-8 text. All files are read and every pattern is matched before any file is written, so a missing literal path, unmatched pattern, or missing capture fails without changing reference files. Replacing a capture with the version it already has is a no-op, so repeated preparation yields the same tree.
+
+Options are validated when the workflow is constructed. The workflow keeps frozen copies of the maps and arrays, with new regular expressions that drop `g`, `y`, and `d`; later changes to the original objects have no effect. Updates run inside trusted staging, right after the package version changes and before the changelog, so they land in the release and next-development commits.
 
 ## Releases Without a Registry
 

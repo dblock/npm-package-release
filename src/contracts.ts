@@ -80,6 +80,8 @@ export interface ReleaseConfig extends Partial<ReleaseServices> {
   readonly branch?: string;
   readonly remote?: string;
   readonly timezone?: string;
+  readonly versionReferences?: Readonly<Record<string, readonly RegExp[]>>;
+  readonly releaseReferences?: Readonly<Record<string, readonly RegExp[]>>;
   readonly prepare?: (context: HookContext) => Promise<void>;
   readonly next?: (context: HookContext) => Promise<void>;
 }

@@ -189,3 +189,12 @@ export function optionalRegistryContract(input: BuiltRelease, services: ReleaseS
   void services.verifier.verify(input.state, input.state.verificationOptions, input.runtime.log);
   return services.publisher?.view(input.state.name, input.state.version);
 }
+new ReleaseWorkflow({
+  versionReferences: { "public/manifest.json": [/"version": "(?<version>\d+\.\d+\.\d+)"/u] },
+  releaseReferences: { "README.md": [/example@(?<version>\d+\.\d+\.\d+)/u], "docs/**/*.md": [/@v(?<version>\S+)/u] },
+});
+new SemanticReleaseWorkflow({ versionReferences: { "public/manifest.json": [/"version": "(?<version>[^"]+)"/u] } });
+// @ts-expect-error References map paths to arrays of regular expressions, not replacement text.
+new ReleaseWorkflow({ versionReferences: { "README.md": "1.0.0" } });
+// @ts-expect-error Reference patterns are regular expressions, not strings.
+new ReleaseWorkflow({ releaseReferences: { "README.md": ["@(?<version>.+)"] } });
