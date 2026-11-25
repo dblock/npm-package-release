@@ -15,7 +15,7 @@ import {
 import {
   InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, PublishArtifact,
   PushRelease, CreateHostedRelease, PrepareNextVersion, VerifyRelease, ReleaseObserver,
-  artifactDirectory, scopedCommand, verifyRetained,
+  artifactDirectory, scopedCommand, validateDestinations, verifyRetained,
 } from "./steps.js";
 import type { BuiltRelease, PreparedRelease } from "./steps.js";
 
@@ -34,6 +34,7 @@ export class ReleaseWorkflow implements Step<ReleaseOptions, ReleaseState> {
   readonly preparation: Workflow<ReleaseOptions, BuiltRelease>;
 
   constructor(private readonly config: ReleaseConfig = {}) {
+    validateDestinations(config);
     config = Object.freeze({ ...config });
     this.config = config;
     this.preparation = prepareRelease(Workflow.start<ReleaseOptions>(new ReleaseObserver(), config.provider)
@@ -80,11 +81,11 @@ export async function verify({
   const store = services.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, artifacts));
   const state = await store.read();
   const npm = new NpmPackage(cwd, execute);
-  const publisher = services.publisher || npm;
+  const publisher = state.registry === false ? null : services.publisher || npm;
   return verifyRetained(log, provider, {
     repository: services.repository || new Git(execute, { branch: state.branch, remote: state.remote }),
     project: services.project || npm, publisher, store,
-    verifier: services.verifier || new RegistryVisibility(publisher),
+    verifier: publisher ? services.verifier || new RegistryVisibility(publisher) : null,
     changelog: services.changelog || null, host: services.host || null,
     validator: services.validator || new HookValidator(), versions: services.versions || new NumericPatchVersions(),
   });

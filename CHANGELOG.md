@@ -1,8 +1,9 @@
 # Changelog
 
-## 0.2.1 (Next)
+## 0.3.0 (Next)
 
 - [#38](https://github.com/dblock/npm-package-release/pull/38): Upgrade already-tested Action and CLI installer pins to v0.2.0 while preserving environment-specific claims and independent coverage and publication checks - [@dblock](https://github.com/dblock).
+- [#51](https://github.com/dblock/npm-package-release/pull/51): Release without a package registry with `publisher: null`, making the GitHub Release the only destination and skipping registry lookup, publication, and visibility checks - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.2.0 (2026/11/13)

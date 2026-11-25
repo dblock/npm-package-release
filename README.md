@@ -90,7 +90,7 @@ This publishes the checked-in version and prepares the next patch version. After
 
 ## Configuration
 
-See [Detailed Usage](docs/usage.md) for CLI/API commands and defaults; [Changelog Templates](docs/changelogs.md) for contribution prompts and categories; [Lifecycle Hooks](docs/hooks.md) for ordered stage extensions; [Composable Workflows](docs/workflows.md) for custom classes and services; and [Semantic Releases](docs/semantic.md) for opt-in Conventional Commits versioning and generated notes.
+See [Detailed Usage](docs/usage.md) for CLI/API commands and defaults; [Changelog Templates](docs/changelogs.md) for contribution prompts and categories; [Lifecycle Hooks](docs/hooks.md) for ordered stage extensions; [Composable Workflows](docs/workflows.md) for custom classes and services; [Releases Without a Registry](docs/usage.md#releases-without-a-registry) for projects released only as GitHub Releases; and [Semantic Releases](docs/semantic.md) for opt-in Conventional Commits versioning and generated notes.
 
 ## Contributing
 

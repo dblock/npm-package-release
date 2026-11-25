@@ -179,3 +179,13 @@ export function serviceContracts(
 ): ReleaseServices {
   return { repository, project, publisher, host, validator, store, verifier, changelog: new Notes(), versions: new Versions() };
 }
+new ReleaseWorkflow({ publisher: null });
+new SemanticReleaseWorkflow({ publisher: null });
+export function optionalRegistryContract(input: BuiltRelease, services: ReleaseServices) {
+  input.state.registry satisfies false | undefined;
+  // @ts-expect-error A release without a registry has no publisher to call.
+  void services.publisher.publish("archive.tgz");
+  // @ts-expect-error A release without a registry has no visibility verifier.
+  void services.verifier.verify(input.state, input.state.verificationOptions, input.runtime.log);
+  return services.publisher?.view(input.state.name, input.state.version);
+}
