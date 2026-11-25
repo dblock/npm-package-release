@@ -5,14 +5,22 @@ on:
     branches: [master]
   pull_request:
     types: [opened, synchronize, reopened, edited]
+  schedule:
+    # Weekly default-branch run, which also keeps the npm download cache from expiring.
+    - cron: '17 6 * * 1'
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
-    name: Test Node ${{ matrix.entry.node }} on ${{ matrix.entry.os }}
+    name: Test Node ${{ matrix.entry.node }} on ${{ matrix.entry.os }}${{ matrix.entry.shard && format(' (Shard {0} of 2)', matrix.entry.shard) || '' }}
     runs-on: ${{ matrix.entry.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -20,7 +28,8 @@ jobs:
           - { node: '22.14.0', os: ubuntu-latest, coverage: false }
           - { node: '24', os: ubuntu-latest, coverage: false }
           - { node: '26', os: ubuntu-latest, coverage: true }
-          - { node: '26', os: windows-latest, coverage: false }
+          - { node: '26', os: windows-latest, coverage: false, shard: 1 }
+          - { node: '26', os: windows-latest, coverage: false, shard: 2 }
           - { node: '26', os: macos-latest, coverage: false }
     steps:
       - name: Check Out Source
@@ -33,13 +42,20 @@ jobs:
         uses: dblock/already-tested@v0.2.0
         id: tested
         with:
-          check: test-${{ matrix.entry.os }}-${{ runner.arch }}-node-${{ matrix.entry.node }}
+          check: test-${{ matrix.entry.os }}-${{ runner.arch }}-node-${{ matrix.entry.node }}${{ matrix.entry.shard && format('-shard-{0}-of-2', matrix.entry.shard) || '' }}
+      - name: Cache npm Downloads
+        if: steps.tested.outputs.skip != 'true'
+        uses: actions/cache@v6.1.0
+        with:
+          path: ${{ runner.os == 'Windows' && '~\AppData\Local\npm-cache' || '~/.npm' }}
+          key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-${{ runner.arch }}-
       - name: Set Up Tooling Node
         if: steps.tested.outputs.skip != 'true'
         uses: actions/setup-node@v7.1.0
         with:
           node-version: '26'
-          cache: npm
+          package-manager-cache: false
       - name: Install Development Dependencies
         if: steps.tested.outputs.skip != 'true'
         run: npm ci
@@ -50,8 +66,16 @@ jobs:
           node-version: ${{ matrix.entry.node }}
           package-manager-cache: false
       - name: Run Tests
-        if: ${{ !matrix.entry.coverage && steps.tested.outputs.skip != 'true' }}
+        if: ${{ !matrix.entry.coverage && !matrix.entry.shard && steps.tested.outputs.skip != 'true' }}
         run: npm test
+      - name: Run Test Shard
+        # Windows runs the slowest tests, so it splits them across two jobs. The shard option must precede the
+        # file pattern, and npm exec provides the npm environment that release fixtures expect.
+        if: ${{ matrix.entry.shard && steps.tested.outputs.skip != 'true' }}
+        shell: bash
+        run: |
+          npm run build
+          npm exec -c "node --test --test-shard=${{ matrix.entry.shard }}/2 test/*.test.js"
       - name: Run Tests with Coverage
         if: ${{ matrix.entry.coverage }}
         run: npm run test:coverage

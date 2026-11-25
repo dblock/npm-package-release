@@ -3,6 +3,7 @@
 ## 0.2.1 (Next)
 
 - [#38](https://github.com/dblock/npm-package-release/pull/38): Upgrade already-tested Action and CLI installer pins to v0.2.0 while preserving environment-specific claims and independent coverage and publication checks - [@dblock](https://github.com/dblock).
+- [#57](https://github.com/dblock/npm-package-release/pull/57): Speed up CI by restoring the nearest npm download cache when the lockfile changes, keeping it warm with a weekly default-branch Test run, splitting Windows tests into two shards, cancelling superseded pull request runs, and setting job timeouts - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.2.0 (2026/11/13)

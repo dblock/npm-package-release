@@ -30,7 +30,7 @@ Use the [Windows installer](https://github.com/dblock/already-tested/releases/do
 
 | Workflow | Check ID | Complete Local Check |
 | --- | --- | --- |
-| `.github/workflows/test.yml` | `test-ubuntu-latest-X64-node-22.14.0`, `test-ubuntu-latest-X64-node-24`, `test-windows-latest-X64-node-26`, or `test-macos-latest-ARM64-node-26` | `npm test` after the workflow's Node 26 dependency setup, then the selected test Node version. |
+| `.github/workflows/test.yml` | `test-ubuntu-latest-X64-node-22.14.0`, `test-ubuntu-latest-X64-node-24`, `test-windows-latest-X64-node-26-shard-1-of-2`, `test-windows-latest-X64-node-26-shard-2-of-2`, or `test-macos-latest-ARM64-node-26` | `npm test` after the workflow's Node 26 dependency setup, then the selected test Node version. Windows splits the tests into two shards: run `npm run build`, then `npm exec -c "node --test --test-shard=N/2 test/*.test.js"` for shard `N`, and claim each shard separately. |
 | `.github/workflows/lint.yml` | `lint-ubuntu-latest-X64-node-26` | `npm run lint` with the workflow's Node 26 setup. |
 | `.github/workflows/package.yml` | `package-ubuntu-latest-X64-node-22.14.0-npm-11` or `package-ubuntu-latest-X64-node-26-npm-12` | The entire Package job: dependency setup, selected Node/npm, unset and empty `PACKAGE_ARCHIVE` runs, `npm pack`, then validation of that retained archive. |
 
