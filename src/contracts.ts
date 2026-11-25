@@ -46,6 +46,7 @@ export interface ReleaseState extends ReleaseIdentity {
   readonly remote: string;
   readonly initialCommit: string;
   readonly verificationOptions: VerificationOptions;
+  readonly registry?: false;
   readonly phase: string;
   readonly activeStep?: string;
   readonly preparedTree?: string;
@@ -155,13 +156,13 @@ export interface RegistryVerifier {
 export interface ReleaseServices {
   readonly repository: ReleaseRepository;
   readonly project: PackageProject;
-  readonly publisher: PackagePublisher;
+  readonly publisher: PackagePublisher | null;
   readonly changelog: Changelog | null;
   readonly versions: VersionPolicy;
   readonly host: ReleaseHost | null;
   readonly validator: ReleaseValidator;
   readonly store: ReleaseStore;
-  readonly verifier: RegistryVerifier;
+  readonly verifier: RegistryVerifier | null;
 }
 export interface VerifyOptions extends ReleaseOptions {
   readonly services?: Partial<ReleaseServices>;

@@ -74,13 +74,13 @@ Use [Lifecycle Hooks](hooks.md) to add ordered before/after behavior to either s
 | --- | --- | --- |
 | `repository` | `ReleaseRepository` | `Git`, including trusted staging, concurrency guards, atomic release pushes, and ref verification. |
 | `project` | `PackageProject` | `NpmPackage`, including manifest/lockfile updates, packing, strict consumers, and archive checks. |
-| `publisher` | `PackagePublisher` | `NpmPackage`, including registry lookup, checksum reconciliation, and exact-archive publication. |
+| `publisher` | `PackagePublisher` | `NpmPackage`, including registry lookup, checksum reconciliation, and exact-archive publication, or `null` for [releases without a registry](usage.md#releases-without-a-registry). |
 | `changelog` | `Changelog` | `KeepAChangelog`; choose `IntrideaChangelog` or a custom class, or `null` to skip built-in notes. |
 | `versions` | `VersionPolicy` | `NumericPatchVersions`, selecting the requested/current version and the next patch. |
 | `host` | `ReleaseHost` | `GitHubReleaseHost`, or `null` to skip hosting. |
 | `validator` | `ReleaseValidator` | `HookValidator`, adapting validation hooks or running npm tests/lint. |
 | `store` | `ReleaseStore` | `DirectoryReleaseStore`, creating a recovery directory and atomically replacing diagnostic JSON. |
-| `verifier` | `RegistryVerifier` | `RegistryVisibility`, bounded fresh lookups against the selected publisher. |
+| `verifier` | `RegistryVerifier` | `RegistryVisibility`, bounded fresh lookups against the selected publisher; `null` when `publisher` is `null`. |
 
 For example, replace next-version selection with a class instead of changing the runner:
 
@@ -98,7 +98,7 @@ class NextMinorVersion {
 export default new ReleaseWorkflow({ versions: new NextMinorVersion() });
 ```
 
-For TypeScript, implement `VersionPolicy`; use `Changelog`, `ReleaseHost`, or another public interface for other services. An explicitly supplied host replaces GitHub-specific construction, including GitHub repository inference. Publisher injection is independent of package building, and the default registry verifier uses that publisher. Existing npm-specific validation remains in `NpmPackage`; alternative behavior requires the corresponding custom classes, not merely a different URL.
+For TypeScript, implement `VersionPolicy`; use `Changelog`, `ReleaseHost`, or another public interface for other services. An explicitly supplied host replaces GitHub-specific construction, including GitHub repository inference. Publisher injection is independent of package building, and the default registry verifier uses that publisher. With `publisher: null`, `runtime.services.publisher` and `runtime.services.verifier` are `null`; custom steps must handle both. Existing npm-specific validation remains in `NpmPackage`; alternative behavior requires the corresponding custom classes, not merely a different URL.
 
 Repository adapters implement `commitRelease(version, tree)` and `commitNext(version, tree)` for release-specific reconciliation, alongside ordinary `commit(message, tree)`. `Git` generates standard messages inside the named operations; message text never selects the reconciliation path. All three operations reject files or index entries that differ from the prepared tree. See [Upgrading](../UPGRADING.md) for adapter migration and existing-output safeguards.
 

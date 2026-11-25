@@ -153,7 +153,8 @@ export class LifecycleInvocation implements WorkflowObserver {
 
   private enabled(event: StepEvent): event is StepEvent & { id: Exclude<LifecycleStage, "prepare" | "next"> } {
     return isStage(event.id) && event.id !== "prepare" && event.id !== "next" &&
-      !(event.id === "host" && isReleaseContext(event.input) && event.input.runtime.services.host === null);
+      !(event.id === "host" && isReleaseContext(event.input) && event.input.runtime.services.host === null) &&
+      !(event.id === "publish" && isReleaseContext(event.input) && event.input.runtime.services.publisher === null);
   }
 
   async started(event: StepEvent): Promise<void> {

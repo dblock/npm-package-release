@@ -10,7 +10,8 @@ export const help = `Usage: npr [--help | --version]
        npr prepare [--config npr.config.js] [--version X.Y.Z] [--artifacts PATH]
        npr verify [--artifacts PATH]
 
-Release publishes to npm and pushes Git commits/tags. Verify never publishes.
+Release publishes to npm, unless configured without a registry, and pushes Git commits/tags.
+Verify never publishes.
 Prepare validates and preserves artifacts without publishing. Release reconciles the current checkout.
 `;
 

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-The default workflow uses one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Built-in services do not support alternate registries, prerelease versions/channels, or workspace publication; [custom workflows](workflows.md) can supply their own classes and contracts.
+The default workflow uses one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Built-in services do not support alternate registries, prerelease versions/channels, or workspace publication; [custom workflows](workflows.md) can supply their own classes and contracts. A project that is not published to a registry can [release only as a GitHub Release](#releases-without-a-registry).
 
 Install `npm-package-release@0.2.0` as an exact development dependency and commit the lockfile. The CLI is `npr`, not the unrelated npm package of that name. Upgrade the dependency and pinned workflow/action together.
 
@@ -76,7 +76,7 @@ npm exec --offline -- npr verify --artifacts /path/to/retained-artifacts
 
 Those version/next-development defaults describe `ReleaseWorkflow`. Export `new SemanticReleaseWorkflow()` to opt into Conventional Commits versioning and generated notes instead; it leaves next-development preparation disabled unless configured. See [Semantic Releases](semantic.md) for policies and replacement classes. The same CLI commands and Actions inputs apply.
 
-`verify` reads `release.json` and its archive, checks the remote lightweight release tag and explicit registry version, and never publishes, commits, pushes, or creates hosted releases. Supply the complete retained directory; do not substitute a rebuilt archive.
+`verify` reads `release.json` and its archive, checks the remote lightweight release tag and explicit registry version (skipped for [releases without a registry](#releases-without-a-registry)), and never publishes, commits, pushes, or creates hosted releases. Supply the complete retained directory; do not substitute a rebuilt archive.
 
 `prepare` stops after validation, archive construction, local tagging, and bundle creation, without publishing or pushing. Preserve the entire directory durably before invoking `release` with the same intended checkout and inputs. Release independently repeats preparation and reconciles matching outputs; there is no restoration command. Both accept `--config`, `--version`, and `--artifacts`; see [Recovery and Reconciliation](recovery.md).
 
@@ -133,9 +133,9 @@ Replace `example` with the package's public API and check its actual behavior. T
 | `prepare` | No additional edits | Trusted release edits after version/changelog preparation. |
 | `validator` | `new HookValidator()` | A `ReleaseValidator` instance. `HookValidator({ validate, validateArtifact })` adapts optional checks; default validation runs npm tests/lint for release and next-development files. |
 | `next` | No additional edits | Trusted next-development edits after the patch increment. |
-| `verifier` | `RegistryVisibility` | A `RegistryVerifier` instance. `new RegistryVisibility(publisher, { attempts: 6, delay: 10000 })` configures bounded lookups; at most 60 attempts and delay up to 60000 milliseconds. |
+| `verifier` | `RegistryVisibility` | A `RegistryVerifier` instance. `new RegistryVisibility(publisher, { attempts: 6, delay: 10000 })` configures bounded lookups; at most 60 attempts and delay up to 60000 milliseconds. Omit it, or pass `null`, when `publisher` is `null`. |
 | `versions` | `NumericPatchVersions` | A `VersionPolicy` instance selecting the release and next-development versions. |
-| `project`, `publisher`, `store` | Built-in npm project/publisher and directory store | Instances implementing the [service contracts](workflows.md#replace-services). |
+| `project`, `publisher`, `store` | Built-in npm project/publisher and directory store | Instances implementing the [service contracts](workflows.md#replace-services). `publisher: null` releases [without a registry](#releases-without-a-registry). |
 | `provider` | Scoped local/GitHub detection | An `ExecutionProvider` instance; per-run selection takes precedence. |
 
 Hooks receive a frozen context with `cwd`, `version`, `releasedVersion`, `previousVersion`, `date` (`YYYY-MM-DD`), `phase`, and `run(program, argumentArray, options)`. Artifact hooks additionally receive `archive` and `consumer`. Next hooks/validation see the development version as `version` and an empty `PACKAGE_ARCHIVE` in command environments. `run` returns standard output, rejects nonzero exits, defaults to a 120-second timeout, and accepts `cwd`, `env`, and `timeout` overrides. npm lookups use a shorter timeout and disable fetch retries; only explicit missing-version responses are retried.
@@ -143,6 +143,29 @@ Hooks receive a frozen context with `cwd`, `version`, `releasedVersion`, `previo
 Hooks also receive `execution`, a provider-neutral immutable snapshot with release data, the logical step, observed history, and allowlisted run metadata. A configuration `observer` class supplies structured success/failure notifications, including failures before initialization. See [Execution Providers and Contexts](execution.md).
 
 For the default `KeepAChangelog`, use `## [Unreleased]` with real notes; releases use `## [0.1.0] - YYYY-MM-DD`. Standard `[Unreleased]: https://github.com/owner/repo/compare/v0.0.1...master` links are updated without rewriting unrelated Markdown. `new IntrideaChangelog()` instead uses `## 0.1.0 (Next)` with real notes and at least one `- Your contribution here.` placeholder; releases use `## 0.1.0 (YYYY/MM/DD)`. See [Changelog Templates](changelogs.md) for optional prompts/category templates and categorized Intridea sections. Empty sections fail before publication. Custom `Changelog.release`/`next` methods receive the invocation's `cwd` alongside version/date data.
+
+## Releases Without a Registry
+
+Set `publisher: null` for a project whose GitHub Release is its only destination:
+
+```js
+import { IntrideaChangelog, ReleaseWorkflow } from "npm-package-release";
+
+export default new ReleaseWorkflow({
+  changelog: new IntrideaChangelog(),
+  publisher: null,
+});
+```
+
+The release still validates, commits, builds, and checks the archive, tags and pushes the release commit, creates the GitHub Release with that archive attached, and prepares the next development version. It never looks up, publishes to, or waits for npm, and `publish` lifecycle hooks do not run. The output omits the `publishing` and `published` phases.
+
+A release without a registry requires a host: the default `GitHubReleaseHost` or your own `ReleaseHost`. `host: null` and a registry `verifier` fail when the workflow is constructed. `SemanticReleaseWorkflow` accepts the same option.
+
+`release.json` records `registry: false`. `npr verify` then checks the retained archive and the remote release tag, records `verified`, and writes a job summary without a registry lookup. Recovery reconciles Git refs and the hosted asset checksum as usual; there is no registry state to inspect.
+
+npm Trusted Publishing is not needed, so skip [Configure Trusted Publishing](#3-configure-trusted-publishing) and the npm bootstrap. The reusable workflow still declares `contents: write` and `id-token: write`, so keep both permissions in its caller; GitHub rejects a caller that grants less than a reusable workflow requests. No built-in step requests an OIDC token without a registry. The `release` environment and direct-push branch rules still apply.
+
+The built-in `NpmPackage` project still rejects private packages and builds an npm tarball, which becomes the attached asset.
 
 ## JavaScript API
 

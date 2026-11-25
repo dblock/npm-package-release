@@ -138,6 +138,21 @@ function validateConfig(config: ReleaseConfig): void {
   for (const hook of ["prepare", "next"] as const) {
     if (config[hook] !== undefined && typeof config[hook] !== "function") throw new Error(`${hook} must be a function.`);
   }
+  validateDestinations(config);
+}
+
+export function validateDestinations(config: ReleaseConfig): void {
+  if (!config || typeof config !== "object") return;
+  if (config.publisher === null) {
+    if (config.host === null) {
+      throw new Error("A release without a registry (publisher: null) requires a release host, such as GitHubReleaseHost.");
+    }
+    if (config.verifier !== undefined && config.verifier !== null) {
+      throw new Error("A registry verifier requires a publisher; omit verifier when publisher is null.");
+    }
+  } else if (config.verifier === null) {
+    throw new Error("verifier: null requires publisher: null; registry releases always verify visibility.");
+  }
 }
 
 function releaseHost(config: ReleaseConfig, run: Command, manifest: PackageManifest) {
@@ -153,7 +168,7 @@ function releaseServices(config: ReleaseConfig,
     ...core,
     validator: config.validator || new HookValidator(),
     changelog: config.changelog === undefined ? new KeepAChangelog() : config.changelog,
-    verifier: config.verifier || new RegistryVisibility(core.publisher),
+    verifier: core.publisher ? config.verifier || new RegistryVisibility(core.publisher) : null,
   });
 }
 
@@ -216,9 +231,9 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     const { previousVersion } = captured;
     execute = scopedCommand(cwd, run, timezone, "release", env);
     const npm = new NpmPackage(cwd, execute);
-    const publisher = config.publisher || npm;
+    const publisher = config.publisher === undefined ? npm : config.publisher;
     const host = releaseHost(config, execute, manifest);
-    const published = await publisher.view(manifest.name, version);
+    const published = await publisher?.view(manifest.name, version);
     if (published && (!published.dist?.integrity || !published.dist.shasum)) {
       throw new Error("Published archive integrity is unavailable.");
     }
@@ -226,7 +241,7 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     const state = snapshot({
       name: manifest.name, version, previousVersion, nextVersion,
       date, timezone, branch: repository.branch, remote: repository.remote, initialCommit: repository.initialCommit,
-      verificationOptions: verification, phase: "started",
+      verificationOptions: verification, ...(publisher ? {} : { registry: false as const }), phase: "started",
     });
     await store.initialize(state);
     const services = releaseServices(config, {
@@ -311,6 +326,7 @@ export class PublishArtifact implements Step<BuiltRelease, PublishedRelease> {
     const { runtime, state } = input;
     const { project, publisher, store } = runtime.services;
     await project.intact(store.directory, state);
+    if (!publisher) return Object.freeze({ ...input, kind: "published", state });
     await runtime.report(state, "publishing");
     await publisher.publish(join(store.directory, state.artifact.filename));
     const published = await runtime.report(state, "published");
@@ -401,12 +417,18 @@ export async function verifyRetained(
     if (!state.releaseCommit || !/^[a-f0-9]{40,64}$/u.test(state.releaseCommit)) throw new Error("Missing release commit identity.");
     await services.repository.verifyTag(state.version, state.releaseCommit);
     log(`[npr] verifying: ${state.name}@${state.version}`);
-    const verification = await services.verifier.verify({ ...state, artifact: state.artifact }, state.verificationOptions, log);
+    const registry = state.registry !== false;
+    if (registry && !services.verifier) throw new Error("Registry verification requires a verifier.");
+    const verification = registry
+      ? await services.verifier!.verify({ ...state, artifact: state.artifact }, state.verificationOptions, log)
+      : "verified";
     state = snapshot({ ...state, verification, activeStep: undefined });
     await services.store.save(state);
     const message = verification === "verified" ? "verified" : "release could not be verified";
     log(`[npr] ${message}: ${state.name}@${state.version}`);
-    await provider.summary(`\n## npm Release Verification\n\n${state.name}@${state.version}: ${message}.\n`);
+    await provider.summary(registry
+      ? `\n## npm Release Verification\n\n${state.name}@${state.version}: ${message}.\n`
+      : `\n## Release Verification\n\n${state.name}@${state.version}: ${message} without a package registry.\n`);
     return state;
   } catch (error) {
     await services.store.save({ ...state, verification: "failed", error: error instanceof Error ? error.message : String(error) });

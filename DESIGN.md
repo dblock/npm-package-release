@@ -2,7 +2,7 @@
 
 ## Purpose and Scope
 
-Port [ruby-gem-release](https://github.com/dblock/ruby-gem-release) to npm with class-based, strongly typed workflow composition. Provide a safe default for one public root npm package, numeric release versions, Intridea or Keep a Changelog notes, npm publication, Git, and optional GitHub Releases. Consumers can compose their own steps and service classes. Native workspace, alternate-registry/host, and prerelease implementations remain deferred.
+Port [ruby-gem-release](https://github.com/dblock/ruby-gem-release) to npm with class-based, strongly typed workflow composition. Provide a safe default for one public root npm package, numeric release versions, Intridea or Keep a Changelog notes, npm publication, Git, and optional GitHub Releases. `publisher: null` removes the registry for projects whose GitHub Release is their only destination. Consumers can compose their own steps and service classes. Native workspace, alternate-registry/host, and prerelease implementations remain deferred.
 
 Keep `npm-package-release` as the repository/npm package name, `npr` as the executable, and `npr.config.js` as the trusted configuration module. TypeScript implementation lives in `src/`; compile ESM JavaScript, declarations, and source maps to ignored `dist/`. The executable lives in `bin/`, unit/release tests in `test/`, compile-time contracts in `test/types/`, installed-package tests in `test/integration/`, and maintenance tools in `scripts/`. Use public Node.js, npm, Git, and GitHub APIs; use SemVer for incrementing and mdast for source-preserving changelog boundaries.
 
@@ -61,6 +61,8 @@ Parse Markdown to identify top-level ATX headings, contribution prompts, actual 
 Default the first semantic release to `1.0.0`, breaking changes to a major increment even in `0.x`, and next-development preparation to disabled. `GeneratedChangelog` writes captured meaningful notes into dated `CHANGELOG.md` sections before validation/commit, creates a missing file, preserves historical source/newlines, and reuses matching sections without rewriting; conflicting notes or duplicate headings fail. Next-development preparation adds no placeholder. Actions retains analysis only for the current invocation, so publication does not rediscover history against the tag created during preparation. Fresh invocations analyze their current source and inputs. `nextVersion` remains planned data even when no next commit is made. See [Semantic Releases](docs/semantic.md).
 
 ## Verification and Recovery
+
+Without a registry (`publisher: null`), initialization skips the registry lookup, publication is skipped along with its lifecycle hooks, and the release requires a host, which becomes its only destination; construction rejects `host: null` and a registry verifier. `release.json` records `registry: false`, so standalone verification checks the retained archive and remote tag without a registry lookup and records `verified`. Git tags and hosted asset checksums remain the reconciliation boundary.
 
 Registry acceptance and visibility are separate. After hosting and next-development preparation, verify the retained artifact against metadata for the explicit released name/version, never the advanced manifest or HEAD. Retry only structured npm E404 responses with bounded waits; authentication, network, malformed metadata, identity, and integrity errors fail closed. Visibility timeout persists an unverified outcome without failing the release or republishing.
 
