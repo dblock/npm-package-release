@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 (Next)
+
+- Your contribution here.
+
 ## 0.4.0 (2026/11/26)
 
 - [#60](https://github.com/dblock/npm-package-release/pull/60): Document reserving a new package name with a `0.0.0` placeholder so the release workflow publishes the first real version through Trusted Publishing instead of a manual first release - [@dblock](https://github.com/dblock).
