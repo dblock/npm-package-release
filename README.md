@@ -105,11 +105,12 @@ A new publisher must successfully publish within [two days](https://docs.npmjs.c
 The auto-created `release` environment accepts any branch, and the npm publisher does not check branches. Optionally restrict it so that only your default branch can publish:
 
 ```sh
+branch="$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)"
 gh api -X PUT "repos/{owner}/{repo}/environments/release" -F "deployment_branch_policy[protected_branches]=false" -F "deployment_branch_policy[custom_branch_policies]=true"
-gh api -X POST "repos/{owner}/{repo}/environments/release/deployment-branch-policies" -f name=master -f type=branch
+gh api -X POST "repos/{owner}/{repo}/environments/release/deployment-branch-policies" -f name="$branch" -f type=branch
 ```
 
-Replace `master` with your default branch. See [Restrict the Release Environment](docs/usage.md#restrict-the-release-environment) for when this matters and how to verify it.
+See [Restrict the Release Environment](docs/usage.md#restrict-the-release-environment) for when this matters and how to verify it.
 
 ### 4. Make a Release
 
