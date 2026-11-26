@@ -8,7 +8,7 @@ Install `npm-package-release@0.4.0` as an exact development dependency and commi
 
 ## New Project Setup
 
-First complete [README steps 1-2](../README.md#usage) in **your package's repository**: install the tool, add `npr.config.js`, and merge `.github/workflows/release.yml`. Use Node.js 26/npm 12 for the commands below. Replace `YOUR_PACKAGE` and `YOUR_OWNER/YOUR_REPO` with your npm name and GitHub repository; examples use default branch `master`.
+First complete [README steps 1-2](../README.md#usage) in **your package's repository**: install the tool, add `npr.config.js`, and merge `.github/workflows/release.yml`. Use Node.js 26/npm 12 for the commands below. Run the commands below from your package's checkout: they read the package name and version from `package.json`, and `gh` infers the GitHub repository and default branch from the checkout.
 
 ### 1. Reserve the Package Name
 
@@ -18,7 +18,7 @@ Skip this step if your package is already published. npm accepts a trusted publi
 npm exec --offline -- npr reserve --dry-run
 npm login --registry=https://registry.npmjs.org
 npm exec --offline -- npr reserve
-npm view YOUR_PACKAGE versions --json --registry=https://registry.npmjs.org
+npm view "$(node -p "require('./package.json').name")" versions --json --registry=https://registry.npmjs.org
 ```
 
 `npr reserve` reads the name, license, and repository URL from `package.json`; `--name` and `--license` override them. It fails if the name already exists, then publishes a placeholder containing only `package.json` from a temporary directory and tries to deprecate it. npm prompts for 2FA in your terminal or browser; complete it yourself. npm processes a new package for a few minutes, so the deprecation can find no version (`npm warn deprecate No version found for 0.0.0`) and leave the placeholder without a deprecation notice; that is harmless, and you can [deprecate it after your first release](#deprecate-the-placeholder). The placeholder stays `latest` until the workflow publishes `0.1.0`. Deprecation does not delay later publication. Do not create a Git tag or GitHub Release for it.
@@ -63,9 +63,10 @@ The first read should print `{"custom_branch_policies":true,"protected_branches"
 Add your release notes, merge them, and run tests/lint. Dispatch the checked-in version, `0.1.0` for a new package:
 
 ```sh
-gh workflow run release.yml --repo YOUR_OWNER/YOUR_REPO --ref master
-gh run list --repo YOUR_OWNER/YOUR_REPO --workflow release.yml --limit 5
-npm view YOUR_PACKAGE@0.1.0 version dist.integrity dist.shasum --json --registry=https://registry.npmjs.org
+branch="$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)"
+gh workflow run release.yml --ref "$branch"
+gh run list --workflow release.yml --limit 5
+npm view "$(node -p "const p = require('./package.json'); p.name + '@' + p.version")" version dist.integrity dist.shasum --json --registry=https://registry.npmjs.org
 ```
 
 Use your actual next unpublished version. After preparation, verify the run summary, matching GitHub tag/release, and registry checksums against the retained artifact. A dispatch is not confirmation of publication; inspect [recovery evidence](#recovery) before retrying a failed or ambiguous run.
