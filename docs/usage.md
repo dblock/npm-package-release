@@ -21,7 +21,7 @@ npm exec --offline -- npr reserve
 npm view YOUR_PACKAGE versions --json --registry=https://registry.npmjs.org
 ```
 
-`npr reserve` reads the name, license, and repository URL from `package.json`; `--name` and `--license` override them. It fails if the name already exists, then publishes a placeholder containing only `package.json` from a temporary directory and deprecates it. npm prompts for 2FA in your terminal or browser; complete it yourself. The placeholder stays `latest` until the workflow publishes `0.1.0`. Deprecation does not delay later publication. Do not create a Git tag or GitHub Release for it.
+`npr reserve` reads the name, license, and repository URL from `package.json`; `--name` and `--license` override them. It fails if the name already exists, then publishes a placeholder containing only `package.json` from a temporary directory and tries to deprecate it. npm prompts for 2FA in your terminal or browser; complete it yourself. npm processes a new package for a few minutes, so the deprecation can find no version (`npm warn deprecate No version found for 0.0.0`) and leave the placeholder without a deprecation notice; that is harmless, and you can [deprecate it after your first release](#deprecate-the-placeholder). The placeholder stays `latest` until the workflow publishes `0.1.0`. Deprecation does not delay later publication. Do not create a Git tag or GitHub Release for it.
 
 ### 2. Configure GitHub
 
@@ -69,6 +69,18 @@ npm view YOUR_PACKAGE@0.1.0 version dist.integrity dist.shasum --json --registry
 ```
 
 Use your actual next unpublished version. After preparation, verify the run summary, matching GitHub tag/release, and registry checksums against the retained artifact. A dispatch is not confirmation of publication; inspect [recovery evidence](#recovery) before retrying a failed or ambiguous run.
+
+#### Deprecate the Placeholder
+
+Once your first release is published and `latest`, deprecate the `0.0.0` placeholder if `npr reserve` could not, so nobody installs the empty version by asking for it explicitly:
+
+```sh
+name="$(node -p "require('./package.json').name")"
+npm view "$name@0.0.0" deprecated --registry=https://registry.npmjs.org
+npm deprecate "$name@0.0.0" "Placeholder reserving this name. Install a later version." --registry=https://registry.npmjs.org
+```
+
+`npm view` prints the deprecation message, or nothing when the placeholder is not deprecated; skip `npm deprecate` if it printed the message. Deprecating is optional and can wait; it does not affect later publication. npm may also list an internal `0.0.0-stage` version; leave it alone.
 
 ## CLI
 
