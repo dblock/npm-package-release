@@ -3,6 +3,7 @@
 ## 0.4.1 (Next)
 
 - [#63](https://github.com/dblock/npm-package-release/pull/63): Document `gh api` commands that restrict the `release` environment to the default branch, with separate README sections for new and existing npm packages - [@dblock](https://github.com/dblock).
+- [#64](https://github.com/dblock/npm-package-release/pull/64): Document that `npr reserve` may not deprecate the `0.0.0` placeholder while npm is still processing a new package, and how to deprecate it after the first release - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.4.0 (2026/11/26)

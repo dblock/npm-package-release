@@ -68,7 +68,7 @@ Trusted Publishing needs an npm trusted publisher, configured differently for ne
 
 #### New npm Package
 
-npm configures Trusted Publishing only for an existing package, so reserve the name with a [deprecated `0.0.0` placeholder](docs/usage.md#1-reserve-the-package-name) and configure the publisher in one step when you are ready to release. Preview, log in, and run it:
+npm configures Trusted Publishing only for an existing package, so reserve the name with a [`0.0.0` placeholder](docs/usage.md#1-reserve-the-package-name) and configure the publisher in one step when you are ready to release. Preview, log in, and run it:
 
 ```sh
 npm exec --offline -- npr bootstrap --dry-run
@@ -120,6 +120,18 @@ gh workflow run release.yml
 ```
 
 This publishes the checked-in version, such as `0.1.0` for a new package, and prepares the next patch version; pass `-f version=0.2.0` to override the checked-in version. Verify the run summary, registry version/checksums, and GitHub Release. Inspect [recovery artifacts](docs/recovery.md) before retrying a failed run.
+
+### 5. Deprecate the Placeholder
+
+For a new package, once the first release is published, deprecate the `0.0.0` placeholder unless `npr reserve` already did. From your package's checkout, logged in to npm:
+
+```sh
+name="$(node -p "require('./package.json').name")"
+npm view "$name@0.0.0" deprecated --registry=https://registry.npmjs.org
+npm deprecate "$name@0.0.0" "Placeholder reserving this name. Install a later version." --registry=https://registry.npmjs.org
+```
+
+`npm view` prints the deprecation message, or nothing when the placeholder is not deprecated; skip `npm deprecate` if it printed the message. npm prompts for 2FA. Deprecating is optional and does not affect later publication. npm may also list an internal `0.0.0-stage` version; leave it alone.
 
 ## Configuration
 
