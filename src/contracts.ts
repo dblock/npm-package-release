@@ -38,6 +38,10 @@ export interface RegistryMetadata extends ReleaseIdentity {
 }
 export interface VerificationOptions { readonly attempts: number; readonly delay: number }
 export type Verification = "verified" | "unverified";
+/** A verification result with the registry's own status, such as a store review state. */
+export interface RegistryOutcome { readonly verification: Verification; readonly status: string }
+/** JSON-safe, credential-free identification of a registry other than npm, recorded in `release.json`. */
+export interface RegistryDescription { readonly kind: string; readonly name: string; readonly [field: string]: string }
 export interface ReleaseState extends ReleaseIdentity {
   readonly semantic?: SemanticPlan;
   readonly previousVersion: string;
@@ -48,7 +52,8 @@ export interface ReleaseState extends ReleaseIdentity {
   readonly remote: string;
   readonly initialCommit: string;
   readonly verificationOptions: VerificationOptions;
-  readonly registry?: false;
+  readonly registry?: false | RegistryDescription;
+  readonly registryStatus?: string;
   readonly phase: string;
   readonly activeStep?: string;
   readonly preparedTree?: string;
@@ -141,6 +146,12 @@ export interface PackageProject {
   intact(directory: string, state: ReleaseIdentity & { readonly artifact: Artifact }): Promise<void>;
 }
 export interface PackagePublisher {
+  /** Returns a publisher for each invocation's directory, command runner, and environment. */
+  bind?(context: ProjectContext): PackagePublisher;
+  /** `false` when the registry reports versions but no archive checksums, so reconciliation is by version only. */
+  readonly checksums?: false;
+  /** Recorded in `release.json` so standalone verification can find a registry other than npm. */
+  readonly registry?: RegistryDescription;
   view(name: string, version: string): Promise<RegistryMetadata | null>;
   publish(archive: string): Promise<void>;
 }
@@ -167,7 +178,7 @@ export interface ReleaseStore {
 export interface RegistryVerifier {
   readonly options?: VerificationOptions;
   verify(state: ReleaseIdentity & { readonly artifact: Artifact },
-    options: VerificationOptions, log: Log): Promise<Verification>;
+    options: VerificationOptions, log: Log): Promise<Verification | RegistryOutcome>;
 }
 export interface ReleaseServices {
   readonly repository: ReleaseRepository;

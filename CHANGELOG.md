@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.3.1 (Next)
+## 0.4.0 (Next)
 
+- [#58](https://github.com/dblock/npm-package-release/pull/58): Add `ChromeWebStore`, a publisher that uploads the exact `ZipArchive` to an existing Chrome Web Store item, submits it for review, reconciles reruns by manifest version, and reports review states as bounded verification outcomes, with keyless Workload Identity Federation or service account key authentication in the reusable workflow - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.3.0 (2026/11/25)

@@ -1,5 +1,11 @@
 # Upgrading
 
+## 0.3.0 to 0.4.0
+
+### Registry Outcomes
+
+`RegistryVerifier.verify` may now return `{ verification, status }` as well as `"verified"` or `"unverified"`; standalone verification records `status` as `registryStatus` in `release.json`. `ReleaseState.registry` is `false` for releases without a registry or a `RegistryDescription` for a registry other than npm, such as the Chrome Web Store. Code that calls a verifier directly or narrows `registry` to `false` must handle both. `PackagePublisher` gains optional `bind`, `checksums`, and `registry` members; existing publishers and configurations need no changes.
+
 ## 0.1.1 to 0.2.0
 
 ### Named Git Commit Operations
