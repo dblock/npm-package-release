@@ -10,26 +10,19 @@ Install `npm-package-release@0.3.0` as an exact development dependency and commi
 
 First complete [README steps 1-2](../README.md#usage) in **your package's repository**: install the tool, add `npr.config.js`, and merge `.github/workflows/release.yml`. Use Node.js 26/npm 12 for the commands below. Replace `YOUR_PACKAGE` and `YOUR_OWNER/YOUR_REPO` with your npm name and GitHub repository; examples use default branch `master`.
 
-### 1. Publish Once Manually
+### 1. Reserve the Package Name
 
-Skip this step if your package is already published. Otherwise, prepare version `0.1.0` and dated changelog notes through your normal review process. From the clean merged checkout:
-
-```sh
-npm test
-npm run lint
-npm pack --json
-tar -tzf YOUR_PACKAGE-0.1.0.tgz
-```
-
-Use the actual tarball filename printed by `npm pack`, especially for scoped packages. Test that exact archive in an isolated consumer before publishing it. With release approval, authenticate and publish that same file:
+Skip this step if your package is already published. npm accepts a trusted publisher only for an existing package, so reserve a new name with an empty `0.0.0` placeholder and let the release workflow publish your real first version. Keep your checked-in version at an unpublished `0.1.0`. In an empty directory outside your repository, authenticate, publish the placeholder, and deprecate it:
 
 ```sh
+printf '{"name":"YOUR_PACKAGE","version":"0.0.0","description":"Placeholder reserving this name. Install a later version.","license":"YOUR_LICENSE"}\n' > package.json
 npm login --registry=https://registry.npmjs.org
-npm publish ./YOUR_PACKAGE-0.1.0.tgz --access public --ignore-scripts --registry=https://registry.npmjs.org
-npm view YOUR_PACKAGE@0.1.0 version dist.integrity dist.shasum --json --registry=https://registry.npmjs.org
+npm publish --access public --registry=https://registry.npmjs.org
+npm deprecate YOUR_PACKAGE@0.0.0 "Placeholder reserving this name. Install a later version." --registry=https://registry.npmjs.org
+npm view YOUR_PACKAGE versions --json --registry=https://registry.npmjs.org
 ```
 
-Complete browser 2FA yourself. Compare the registry checksums with `npm pack` output and retain the archive. Create the matching Git tag/GitHub Release only with approval; never overwrite a published version or tag.
+Complete browser 2FA yourself, and use your package's actual name, including any scope, and license. The placeholder contains only `package.json` and stays `latest` until the workflow publishes `0.1.0`. Do not create a Git tag or GitHub Release for it.
 
 ### 2. Configure GitHub
 
@@ -46,16 +39,16 @@ npm trust github YOUR_PACKAGE --repo YOUR_OWNER/YOUR_REPO --file release.yml --e
 npm trust list YOUR_PACKAGE --json --registry=https://registry.npmjs.org
 ```
 
-Use the calling workflow's filename, not the reusable workflow's filename. Check that the saved owner, repository, filename, environment, and direct-publish permission match. Do not add an npm token or `NODE_AUTH_TOKEN` to GitHub secrets. A new publisher must successfully publish within [two days](https://docs.npmjs.com/trusted-publishers/), so configure it when you are ready for the next release.
+Use the calling workflow's filename, not the reusable workflow's filename. Check that the saved owner, repository, filename, environment, and direct-publish permission match. Do not add an npm token or `NODE_AUTH_TOKEN` to GitHub secrets. A new publisher must successfully publish within [two days](https://docs.npmjs.com/trusted-publishers/), so configure it when you are ready for your first release.
 
 ### 4. Release From Actions
 
-Add your release notes, merge them, and run tests/lint. For the next patch after manual `0.1.0`, dispatch:
+Add your release notes, merge them, and run tests/lint. Dispatch the checked-in version, `0.1.0` for a new package:
 
 ```sh
-gh workflow run release.yml --repo YOUR_OWNER/YOUR_REPO --ref master -f version=0.1.1
+gh workflow run release.yml --repo YOUR_OWNER/YOUR_REPO --ref master
 gh run list --repo YOUR_OWNER/YOUR_REPO --workflow release.yml --limit 5
-npm view YOUR_PACKAGE@0.1.1 version dist.integrity dist.shasum --json --registry=https://registry.npmjs.org
+npm view YOUR_PACKAGE@0.1.0 version dist.integrity dist.shasum --json --registry=https://registry.npmjs.org
 ```
 
 Use your actual next unpublished version. After preparation, verify the run summary, matching GitHub tag/release, and registry checksums against the retained artifact. A dispatch is not confirmation of publication; inspect [recovery evidence](#recovery) before retrying a failed or ambiguous run.
@@ -361,7 +354,7 @@ Set `build: true` to run `npm run build` after dependency installation and befor
 
 For step-based integration, adapt the [composite caller example](../examples/action-release.yml), using `dblock/npm-package-release@v0.3.0` after checking out the attached default branch with full history, setting up compatible Node/npm, installing dependencies, and configuring Git identity. Its inputs are `config`, optional `version`, and `timezone`. The caller must supply manual-dispatch/default-branch guards, the `release` environment, contents/OIDC permissions, and non-canceling release concurrency; the composite action uses the same upload gate and failure-aware diagnostic upload. It does not configure repository protections or npm credentials. Both Actions interfaces require a workflow instance implementing prepare/run.
 
-Follow [New Project Setup](#new-project-setup) for staged or manual bootstrap, GitHub environment and branch rules, exact npm Trusted Publisher fields, and dispatch/verification. Existing packages skip only bootstrap. [RELEASING](../RELEASING.md) instead describes maintaining this tool's own package, not setting up your consumer project.
+Follow [New Project Setup](#new-project-setup) for placeholder name reservation, GitHub environment and branch rules, exact npm Trusted Publisher fields, and dispatch/verification. Existing packages skip only bootstrap. [RELEASING](../RELEASING.md) instead describes maintaining this tool's own package, not setting up your consumer project.
 
 Release commits and tags require direct-push permission on the default branch. Configure that only with explicit authorization, retaining force-push/deletion protections and recognizing that removing a PR requirement permits direct pushes by all writers, not only this workflow. The tool does not change repository protections itself.
 

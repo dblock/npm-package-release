@@ -66,7 +66,7 @@ Merge the caller and locked development dependency into your default branch. Upg
 
 In **your GitHub repository → Settings → Environments**, create `release`, restrict it to your default branch, and optionally require maintainer approval. Branch rules must allow release commits/tags to be pushed; see [setup and branch permissions](docs/usage.md#new-project-setup).
 
-**New npm package:** First [publish a tested archive manually](docs/usage.md#1-publish-once-manually). After verifying the first release, open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
+**New npm package:** npm configures Trusted Publishing only for an existing package, so first [reserve its name with a `0.0.0` placeholder](docs/usage.md#1-reserve-the-package-name); the workflow publishes your real first version. Then open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
 
 | Field | Value |
 | --- | --- |
@@ -86,7 +86,7 @@ Review your changes, run tests, and dispatch from your default branch:
 gh workflow run release.yml
 ```
 
-This publishes the checked-in version and prepares the next patch version. After a manual first publication, select a new unpublished version; pass `-f version=0.1.1` to override the checked-in version. Verify the run summary, registry version/checksums, and GitHub Release. Inspect [recovery artifacts](docs/recovery.md) before retrying a failed run.
+This publishes the checked-in version, such as `0.1.0` for a new package, and prepares the next patch version; pass `-f version=0.2.0` to override the checked-in version. Verify the run summary, registry version/checksums, and GitHub Release. Inspect [recovery artifacts](docs/recovery.md) before retrying a failed run.
 
 ## Configuration
 
