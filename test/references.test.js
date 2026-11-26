@@ -89,6 +89,12 @@ test("missing, unmatched, uncaptured, non-text, and escaping references fail bef
     [{ releaseReferences: { "binary.dat": [/(?<version>x)/u] } }, /must be UTF-8 text: binary\.dat/u, async () => {
       await writeFile(join(fixture.cwd, "binary.dat"), Buffer.from([0xff, 0x78]));
     }],
+    [{ releaseReferences: { "**/*.md": [installPin] } },
+      /^Error: Version reference \*\*\/\*\.md must not update \.github\/workflows\/notes\.md: GitHub does not let a workflow's GITHUB_TOKEN create or update files under \.github\/workflows\/, so the release push would be rejected\. Keep versions out of workflow files and read them at run time\.$/u,
+      async () => {
+        await mkdir(join(fixture.cwd, ".github", "workflows"), { recursive: true });
+        await writeFile(join(fixture.cwd, ".github", "workflows", "notes.md"), "Install @npr-test/example@0.0.9.\n");
+      }],
   ];
   if (process.platform !== "win32") {
     cases.push([{ releaseReferences: { "outside.txt": [/(?<version>1\.0\.0)/u] } }, /regular file inside the repository: outside\.txt/u, async () => {
@@ -125,9 +131,23 @@ test("reference options are validated and copied when workflows are constructed"
       [{ "../README.md": [installPin] }, /paths must be relative/u], [{ "C:/README.md": [installPin] }, /paths must be relative/u],
       [{ "docs\\README.md": [installPin] }, /using \/ separators/u], [{ ".git/config": [installPin] }, /inside the repository/u],
       [{ "": [installPin] }, /paths must be relative/u],
+      [{ ".github/workflows/release.yml": [installPin] },
+        /must not update \.github\/workflows\/release\.yml: GitHub does not let a workflow's GITHUB_TOKEN create or update files under \.github\/workflows\/, so the release push would be rejected\. Keep versions out of workflow files and read them at run time\.$/u],
+      [{ "./.github/workflows/release.yml": [installPin] }, /must not update \.\/\.github\/workflows\/release\.yml: GitHub/u],
+      [{ ".GitHub/Workflows/release.yml": [installPin] }, /must not update \.GitHub\/Workflows\/release\.yml: GitHub/u],
+      [{ ".github/workflows/*.yml": [installPin] }, /must not update \.github\/workflows\/\*\.yml: GitHub/u],
+      [{ ".github/**": [installPin] }, /must not update \.github\/\*\*: GitHub/u],
+      [{ "**/*.yml": [installPin] }, /must not update \*\*\/\*\.yml: GitHub/u],
+      [{ "**/*.yaml": [installPin] }, /must not update \*\*\/\*\.yaml: GitHub/u],
+      [{ "**": [installPin] }, /must not update \*\*: GitHub/u],
     ]) {
       assert.throws(() => new Workflow({ versionReferences: option }), error);
       assert.throws(() => new Workflow({ releaseReferences: option }), error);
+    }
+  }
+  for (const path of [".github/actions/setup/action.yml", "action.yml", "docs/**/*.md", "**/*.md", ".github/workflows-notes.md"]) {
+    for (const option of ["versionReferences", "releaseReferences"]) {
+      assert.deepEqual(Object.keys(new ReleaseWorkflow({ [option]: { [path]: [installPin] } }).config[option]), [path]);
     }
   }
   const pattern = /version (?<version>\S+)/giu;

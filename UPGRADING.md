@@ -1,5 +1,13 @@
 # Upgrading
 
+## 0.4.0 to 0.4.1
+
+### Workflow Files in Version References
+
+`versionReferences` and `releaseReferences` no longer accept files under `.github/workflows/`. GitHub never lets a workflow's `GITHUB_TOKEN` create or update workflow files, so a release that edits one fails when it pushes, after publication; for example, a next-development commit that bumps a version in a reusable workflow is rejected with `refusing to allow a GitHub App to create or update workflow ... without workflows permission`. Construction now rejects such literal paths and globs that match a workflow file, such as `.github/**` or `**/*.yml`, and preparation rejects any tracked workflow file a glob selects.
+
+Remove workflow files from these options and narrow broad globs, for example `docs/**/*.md` instead of `**/*.md` when a Markdown file lives under `.github/workflows/`. If a workflow needs the package version, read it at run time, such as from the caller's installed package, instead of pinning it in the workflow file. Composite actions outside `.github/workflows/`, such as `action.yml`, can stay in the options.
+
 ## 0.1.1 to 0.2.0
 
 ### Named Git Commit Operations
