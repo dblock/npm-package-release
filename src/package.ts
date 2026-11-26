@@ -151,7 +151,7 @@ export class NpmPackage implements PackageProject, PackagePublisher {
   }
 }
 
-const npmName = /^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/u;
+export const npmName = /^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/u;
 
 export async function readManifest(cwd: string): Promise<PackageManifest> {
   const metadata: PackageManifest = JSON.parse(await readFile(join(cwd, "package.json"), "utf8"));
