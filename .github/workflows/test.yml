@@ -4,59 +4,57 @@ on:
   push:
     branches: [master]
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
 
 jobs:
   test:
-    name: Test Node ${{ matrix.entry.node }} on ${{ matrix.entry.os }}
-    runs-on: ${{ matrix.entry.os }}
+    name: Test Node ${{ matrix.entry.node }} on ${{ matrix.entry.label }}
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
         entry:
-          - { node: '22.14.0', os: ubuntu-latest, coverage: false }
-          - { node: '24', os: ubuntu-latest, coverage: false }
-          - { node: '26', os: ubuntu-latest, coverage: true }
-          - { node: '26', os: windows-latest, coverage: false }
-          - { node: '26', os: macos-latest, coverage: false }
+          - { id: ubuntu-22, node: '22.14.0', os: ubuntu-latest, label: Ubuntu, wrapper: '[]', artifacts: '' }
+          - { id: ubuntu-24, node: '24', os: ubuntu-latest, label: Ubuntu, wrapper: '[]', artifacts: '' }
+          - { id: ubuntu-26, node: '26', os: ubuntu-latest, label: Ubuntu, wrapper: '["c8","--all","--include=dist/**/*.js","--include=bin/**/*.js","--include=scripts/**/*.js","--include=npr.config.js","--exclude=dist/contracts.js","--reporter=text","--reporter=lcov"]', artifacts: coverage/lcov.info }
+          - { id: windows-26, node: '26', os: windows-latest, label: Windows, wrapper: '[]', artifacts: '' }
+          - { id: macos-26, node: '26', os: macos-latest, label: macOS, wrapper: '[]', artifacts: '' }
+    uses: dblock/testlanes/.github/workflows/testlanes.yml@v0.2.0
+    with:
+      framework: node
+      runs-on: ${{ matrix.entry.os }}
+      install-node-version: '26'
+      node-version: ${{ matrix.entry.node }}
+      pattern: test/*.test.js
+      setup: npm run build
+      shards: 4
+      artifact-prefix: test-${{ matrix.entry.id }}
+      test-wrapper: ${{ matrix.entry.wrapper }}
+      artifacts: ${{ matrix.entry.artifacts }}
+
+  coverage:
+    name: Upload Coverage
+    needs: test
+    runs-on: ubuntu-latest
     steps:
       - name: Check Out Source
         uses: actions/checkout@v7.0.1
         with:
-          fetch-depth: 2
           persist-credentials: false
-      - name: Check Local Test Claim
-        if: github.event_name == 'pull_request' && !matrix.entry.coverage
-        uses: dblock/already-tested@v0.2.0
-        id: tested
+      - name: Download Shard Coverage
+        uses: actions/download-artifact@v8.0.2
         with:
-          check: test-${{ matrix.entry.os }}-${{ runner.arch }}-node-${{ matrix.entry.node }}
-      - name: Set Up Tooling Node
-        if: steps.tested.outputs.skip != 'true'
-        uses: actions/setup-node@v7.1.0
-        with:
-          node-version: '26'
-          cache: npm
-      - name: Install Development Dependencies
-        if: steps.tested.outputs.skip != 'true'
-        run: npm ci
-      - name: Set Up Test Node
-        if: steps.tested.outputs.skip != 'true'
-        uses: actions/setup-node@v7.1.0
-        with:
-          node-version: ${{ matrix.entry.node }}
-          package-manager-cache: false
-      - name: Run Tests
-        if: ${{ !matrix.entry.coverage && steps.tested.outputs.skip != 'true' }}
-        run: npm test
-      - name: Run Tests with Coverage
-        if: ${{ matrix.entry.coverage }}
-        run: npm run test:coverage
+          pattern: test-ubuntu-26-artifacts-*
+          path: shards
+      - name: List Coverage Reports
+        id: reports
+        run: echo "files=$(find shards -name lcov.info | sort | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
       - name: Upload Coverage to Coveralls
-        if: ${{ matrix.entry.coverage }}
         uses: coverallsapp/github-action@v2.3.8
         with:
-          file: coverage/lcov.info
+          files: ${{ steps.reports.outputs.files }}

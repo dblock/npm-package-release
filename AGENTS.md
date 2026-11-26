@@ -36,7 +36,7 @@ Use the pinned `already-tested` CLI and [local claim instructions](CONTRIBUTING.
 
 Commit all intended inputs, leave the tracked working tree clean, then generate a claim with the exact workflow/check from the table in CONTRIBUTING, `--command` describing the complete executed check, and `--environment` recording actual OS/CPU/toolchain versions. Paste the entire CLI output into the PR description, preserving its hidden claim and AI disclosure. Do not put claims in comments or source files. Do not use file filters or blanket claims. After tracked source/workflow changes, retest, commit, and replace stale claims.
 
-All `master` pushes, the Linux Node 26 coverage/Coveralls lane, and publishing workflows always run independently of claims. PR-description claims are trusted contributor statements, not execution evidence or a security boundary; missing, stale, malformed, or unverifiable claims must run CI normally.
+All `master` pushes, the Test workflow with its testlanes shards and Coveralls upload, and publishing workflows always run independently of claims. PR-description claims are trusted contributor statements, not execution evidence or a security boundary; missing, stale, malformed, or unverifiable claims must run CI normally.
 
 ## Documentation and Versions
 

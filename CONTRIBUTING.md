@@ -16,7 +16,7 @@ To test a retained artifact without repacking, use `PACKAGE_ARCHIVE=/absolute/pa
 
 ## Local Check Claims
 
-[already-tested](https://github.com/dblock/already-tested) can skip matching PR checks after the same complete check ran locally. CI still starts each required job, but a verified claim skips its setup, dependency installation, and check steps. Missing/stale claims or verifier failures run the normal steps. Editing the PR description reruns verification. Every `master` push runs full CI; the Linux Node 26 coverage/Coveralls lane and release workflows are never skipped.
+[already-tested](https://github.com/dblock/already-tested) can skip matching Lint and Package PR checks after the same complete check ran locally. CI still starts each job, but a verified claim skips its setup, dependency installation, and check steps. Missing/stale claims or verifier failures run the normal steps. Editing the PR description reruns verification. Every `master` push runs full CI, and the Test workflow, which shards every environment with testlanes, and release workflows never use claims.
 
 Install the same released CLI version as the Actions gate:
 
@@ -30,20 +30,19 @@ Use the [Windows installer](https://github.com/dblock/already-tested/releases/do
 
 | Workflow | Check ID | Complete Local Check |
 | --- | --- | --- |
-| `.github/workflows/test.yml` | `test-ubuntu-latest-X64-node-22.14.0`, `test-ubuntu-latest-X64-node-24`, `test-windows-latest-X64-node-26`, or `test-macos-latest-ARM64-node-26` | `npm test` after the workflow's Node 26 dependency setup, then the selected test Node version. |
 | `.github/workflows/lint.yml` | `lint-ubuntu-latest-X64-node-26` | `npm run lint` with the workflow's Node 26 setup. |
 | `.github/workflows/package.yml` | `package-ubuntu-latest-X64-node-22.14.0-npm-11` or `package-ubuntu-latest-X64-node-26-npm-12` | The entire Package job: dependency setup, selected Node/npm, unset and empty `PACKAGE_ARCHIVE` runs, `npm pack`, then validation of that retained archive. |
 
 IDs include the actual `runner.arch`; replace the example architecture if the runner changes. Match the CI runner's OS version, CPU architecture, Node/npm versions, and setup, not just its check name. A macOS run cannot justify Linux/Windows claims. A single `npm run test:package` does not justify the whole Package job. Keep claims scoped to one actually tested environment; do not use blanket claims or file filters.
 
-After running the complete matching check, commit all tested inputs and leave the tracked working tree clean. For example, only after reproducing the macOS ARM64 Node 26 job:
+After running the complete matching check, commit all tested inputs and leave the tracked working tree clean. For example, only after reproducing the Lint job on Ubuntu X64 with Node 26:
 
 ```sh
 already-tested claim \
-  --workflow .github/workflows/test.yml \
-  --check test-macos-latest-ARM64-node-26 \
-  --command 'npm test' \
-  --environment '<actual matching macOS, ARM64, Node and npm versions>'
+  --workflow .github/workflows/lint.yml \
+  --check lint-ubuntu-latest-X64-node-26 \
+  --command 'npm run lint' \
+  --environment '<actual matching Ubuntu, X64, Node and npm versions>'
 ```
 
 Paste the entire expandable output into the PR description without changing its hidden claim. After tracked source or workflow edits, retest, commit, and replace the claim. Claims bind all tracked files and the executing workflow, but do not prove execution: anyone who can edit a PR description can forge one. Preserve independent default-branch CI and never claim checks or environments you did not test.
@@ -70,7 +69,7 @@ The optional `npm-package-release/testing` entry point is public production pack
 
 Coverage includes the root release configuration and maps compiled execution back to TypeScript. Exclude only the empty JavaScript generated from `contracts.ts`, which contains interfaces/types and no executable implementation; its guarantees are checked by contract fixtures rather than runtime coverage.
 
-Keep `Test`, `Lint`, and `Package` workflows separate. Use explicit `matrix.entry` lists of compact inline objects, not `include`/`exclude` or Cartesian axes. Maintain Coveralls coverage upload; JavaScript Danger checks are not configured.
+Keep `Test`, `Lint`, and `Package` workflows separate. The Test workflow runs every environment through [testlanes](https://github.com/dblock/testlanes): Node 22.14.0, 24, and 26 on Ubuntu and Node 26 on Windows and macOS each split `test/*.test.js` into four runtime-balanced shards that install with Node 26, then run `npm run build` and the tests with the environment's Node. The Ubuntu Node 26 shards run under c8 through `test-wrapper` and upload `coverage/lcov.info`, and the Upload Coverage job sends every shard's report to Coveralls. The testlanes development dependency and reusable workflow tag are pinned to the same release, so update both together. Use explicit `matrix.entry` lists of compact inline objects, not `include`/`exclude` or Cartesian axes. Maintain Coveralls coverage upload; JavaScript Danger checks are not configured.
 
 ## Pull Requests
 
