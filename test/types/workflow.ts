@@ -4,6 +4,7 @@ import {
   LocalExecutionProvider, prepare,
   SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator,
   LifecycleHooks, MarkdownSection, GeneratedChangelog, ZipArchive, GitHubAction, actionEntryPoints, buildCommitMessage,
+  ChromeWebStore, EnvironmentAccessToken, ServiceAccountKey, registryVerifier,
 } from "../../src/index.js";
 import type {
   Step, BuiltRelease, ReleaseOptions, Changelog, PackagePublisher, ReleaseValidator, VersionPolicy,
@@ -182,7 +183,7 @@ export function serviceContracts(
 new ReleaseWorkflow({ publisher: null });
 new SemanticReleaseWorkflow({ publisher: null });
 export function optionalRegistryContract(input: BuiltRelease, services: ReleaseServices) {
-  input.state.registry satisfies false | undefined;
+  input.state.registry satisfies false | import("../../src/index.js").RegistryDescription | undefined;
   // @ts-expect-error A release without a registry has no publisher to call.
   void services.publisher.publish("archive.tgz");
   // @ts-expect-error A release without a registry has no visibility verifier.
@@ -228,3 +229,28 @@ export async function floatingContracts(repository: ReleaseRepository, input: Bu
   await repository.floatingTags("1.0.0", "a".repeat(40), ["major"]);
   return repository.floatingTags?.("1.0.0", "a".repeat(40), ["major", "minor"]);
 }
+
+const chrome = new ChromeWebStore({
+  publisherId: "example-publisher", itemId: "abcdefghijklmnopabcdefghijklmnop", token: new EnvironmentAccessToken("GOOGLE_ACCESS_TOKEN"),
+  publishType: "STAGED_PUBLISH", deployPercentage: 50, polling: { attempts: 3, delay: 1000 },
+});
+new ReleaseWorkflow({ project: new ZipArchive({ name: "example-extension" }), publisher: chrome });
+chrome satisfies PackagePublisher;
+chrome satisfies RegistryVerifier;
+registryVerifier(chrome) satisfies RegistryVerifier;
+new ChromeWebStore({ publisherId: "p", itemId: "abcdefghijklmnopabcdefghijklmnop", token: new ServiceAccountKey("KEY") });
+new ChromeWebStore({ publisherId: "p", itemId: "abcdefghijklmnopabcdefghijklmnop", token: { async token({ env }) { return env.TOKEN ?? ""; } } });
+export async function chromeContracts(input: BuiltRelease) {
+  const outcome = await chrome.verify(input.state, input.state.verificationOptions, () => {});
+  outcome.status satisfies string;
+  input.state.registryStatus satisfies string | undefined;
+  const registry = input.state.registry;
+  if (registry) registry.kind satisfies string;
+  (await chrome.status()).submittedItemRevisionStatus?.state satisfies string | undefined;
+}
+// @ts-expect-error The store item ID is required.
+new ChromeWebStore({ publisherId: "p" });
+// @ts-expect-error Access tokens come from a token source, not a configured string.
+new ChromeWebStore({ publisherId: "p", itemId: "abcdefghijklmnopabcdefghijklmnop", token: "secret" });
+// @ts-expect-error Publish types are the store's DEFAULT_PUBLISH or STAGED_PUBLISH.
+new ChromeWebStore({ publisherId: "p", itemId: "abcdefghijklmnopabcdefghijklmnop", publishType: "NOW" });

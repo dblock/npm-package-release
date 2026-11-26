@@ -26,6 +26,18 @@ on:
         description: Named timezone for release dates and Git timestamps.
         type: string
         default: UTC
+      google-workload-identity-provider:
+        description: Optional Workload Identity Provider resource name for a keyless Chrome Web Store access token.
+        type: string
+        default: ''
+      google-service-account:
+        description: Service account linked to the Chrome Web Store publisher, impersonated with the Workload Identity Provider.
+        type: string
+        default: ''
+    secrets:
+      CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY:
+        description: Optional service account JSON key linked to the Chrome Web Store publisher.
+        required: false
 
 permissions:
   contents: write
@@ -71,7 +83,21 @@ jobs:
         run: |
           git config --local user.name 'github-actions[bot]'
           git config --local user.email '41898282+github-actions[bot]@users.noreply.github.com'
+      - name: Authenticate to Google Cloud
+        id: google
+        if: ${{ inputs.google-workload-identity-provider != '' }}
+        uses: google-github-actions/auth@v3.0.0
+        with:
+          workload_identity_provider: ${{ inputs.google-workload-identity-provider }}
+          service_account: ${{ inputs.google-service-account }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          create_credentials_file: false
+          export_environment_variables: false
       - name: Prepare Release
+        env:
+          CHROME_WEB_STORE_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY: ${{ secrets.CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY }}
         run: npm exec --offline -- npr prepare --config "$NPR_CONFIG" --version "$NPR_VERSION" --artifacts "$RUNNER_TEMP/npr-release"
       - name: Preserve Prepared Release Artifacts
         uses: actions/upload-artifact@v7.0.2
@@ -82,6 +108,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Publish Release
+        env:
+          CHROME_WEB_STORE_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
+          CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY: ${{ secrets.CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY }}
         run: npm exec --offline -- npr release --config "$NPR_CONFIG" --version "$NPR_VERSION" --artifacts "$RUNNER_TEMP/npr-release"
       - name: Preserve Release Artifacts
         if: ${{ always() }}

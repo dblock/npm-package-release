@@ -13,10 +13,11 @@ import { currentExecutionProvider } from "./execution.js";
 import type { ExecutionContext, ExecutionProvider } from "./execution.js";
 import {
   DirectoryReleaseStore, GitHubReleaseHost, HookValidator, KeepAChangelog, NumericPatchVersions,
-  RegistryVisibility, snapshot, verificationOptions,
+  registryVerifier, snapshot, verificationOptions,
 } from "./services.js";
 import type {
-  Artifact, Command, Environment, HookContext, Log, PackageManifest, PackageProject, ProjectContext, ReleaseConfig, ReleaseOptions, ReleaseRepository,
+  Artifact, Command, Environment, HookContext, Log, PackageManifest, PackageProject, PackagePublisher, ProjectContext,
+  ReleaseConfig, ReleaseOptions, ReleaseRepository,
   ReleaseServices, ReleaseState,
 } from "./contracts.js";
 import type { Step, StepEvent, WorkflowObserver } from "./workflow.js";
@@ -191,6 +192,10 @@ function bindProject(config: ReleaseConfig, context: ProjectContext): PackagePro
   return config.project?.bind ? config.project.bind(Object.freeze(context)) : config.project;
 }
 
+function bindPublisher(publisher: PackagePublisher | null, context: ProjectContext): PackagePublisher | null {
+  return publisher?.bind ? publisher.bind(Object.freeze(context)) : publisher;
+}
+
 function releaseHost(config: ReleaseConfig, run: Command, manifest: PackageManifest) {
   const repository = manifest.repository?.url?.replace(/^git\+/u, "").match(
     /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/u,
@@ -204,7 +209,7 @@ function releaseServices(config: ReleaseConfig,
     ...core,
     validator: config.validator || new HookValidator(),
     changelog: config.changelog === undefined ? new KeepAChangelog() : config.changelog,
-    verifier: core.publisher ? config.verifier || new RegistryVisibility(core.publisher) : null,
+    verifier: core.publisher ? config.verifier || registryVerifier(core.publisher) : null,
   });
 }
 
@@ -254,7 +259,6 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     const provider = options.provider || injectedProvider || config.provider || currentExecutionProvider(env);
     const timezone = config.timezone || provider.timezone || "UTC";
     const date = this.date(timezone, env);
-    const verification = verificationOptions(config.verifier?.options);
     let execute = scopedCommand(cwd, run, timezone, "release", env);
     const repository = await this.repository(cwd, execute, provider, env);
     const project = bindProject(config, { cwd, run: execute, env }) || new NpmPackage(cwd, execute);
@@ -267,17 +271,19 @@ export class InitializeRelease implements Step<ReleaseOptions, InitializedReleas
     const { previousVersion } = captured;
     execute = scopedCommand(cwd, run, timezone, "release", env);
     const npm = new NpmPackage(cwd, execute);
-    const publisher = config.publisher === undefined ? npm : config.publisher;
+    const publisher: PackagePublisher | null = config.publisher === undefined ? npm : bindPublisher(config.publisher, { cwd, run: execute, env });
+    const verification = verificationOptions(config.verifier?.options ?? (publisher ? registryVerifier(publisher).options : undefined));
     const host = releaseHost(config, execute, manifest);
     const published = await publisher?.view(manifest.name, version);
-    if (published && (!published.dist?.integrity || !published.dist.shasum)) {
+    if (published && publisher?.checksums !== false && (!published.dist?.integrity || !published.dist.shasum)) {
       throw new Error("Published archive integrity is unavailable.");
     }
     const store = config.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, options.artifacts));
     const state = snapshot({
       name: manifest.name, version, previousVersion, nextVersion,
       date, timezone, branch: repository.branch, remote: repository.remote, initialCommit: repository.initialCommit,
-      verificationOptions: verification, ...(publisher ? {} : { registry: false as const }), phase: "started",
+      verificationOptions: verification,
+      ...(publisher ? publisher.registry ? { registry: publisher.registry } : {} : { registry: false as const }), phase: "started",
     });
     await store.initialize(state);
     const services = releaseServices(config, {
@@ -483,15 +489,20 @@ export async function verifyRetained(
     log(`[npr] verifying: ${state.name}@${state.version}`);
     const registry = state.registry !== false;
     if (registry && !services.verifier) throw new Error("Registry verification requires a verifier.");
-    const verification = registry
+    const outcome = registry
       ? await services.verifier!.verify({ ...state, artifact: state.artifact }, state.verificationOptions, log)
       : "verified";
-    state = snapshot({ ...state, verification, activeStep: undefined });
+    const { verification, status } = typeof outcome === "string" ? { verification: outcome, status: undefined } : outcome;
+    if (verification !== "verified" && verification !== "unverified") throw new Error("Invalid registry verification outcome.");
+    if (status !== undefined && (typeof status !== "string" || !status)) throw new Error("Invalid registry verification status.");
+    state = snapshot({ ...state, verification, registryStatus: status, activeStep: undefined });
     await services.store.save(state);
-    const message = verification === "verified" ? "verified" : "release could not be verified";
+    const message = verification === "verified" ? "verified"
+      : status ? `not yet published (${status})` : "release could not be verified";
     log(`[npr] ${message}: ${state.name}@${state.version}`);
+    const title = typeof state.registry === "object" ? `${state.registry.name} Verification` : "npm Release Verification";
     await provider.summary(registry
-      ? `\n## npm Release Verification\n\n${state.name}@${state.version}: ${message}.\n`
+      ? `\n## ${title}\n\n${state.name}@${state.version}: ${message}.\n`
       : `\n## Release Verification\n\n${state.name}@${state.version}: ${message} without a package registry.\n`);
     return state;
   } catch (error) {

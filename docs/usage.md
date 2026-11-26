@@ -2,7 +2,7 @@
 
 ## Requirements
 
-The default workflow uses one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Built-in services do not support alternate registries, prerelease versions/channels, or workspace publication; [custom workflows](workflows.md) can supply their own classes and contracts. A project that is not published to a registry can [release only as a GitHub Release](#releases-without-a-registry), including [JavaScript GitHub Actions](#github-actions-releases).
+The default workflow uses one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Built-in services do not support alternate registries, prerelease versions/channels, or workspace publication; [custom workflows](workflows.md) can supply their own classes and contracts. A project that is not published to a registry can [release only as a GitHub Release](#releases-without-a-registry), including [JavaScript GitHub Actions](#github-actions-releases), and a browser extension zip can also be submitted to the [Chrome Web Store](#chrome-web-store).
 
 Install `npm-package-release@0.3.0` as an exact development dependency and commit the lockfile. The CLI is `npr`, not the unrelated npm package of that name. Upgrade the dependency and pinned workflow/action together.
 
@@ -76,7 +76,7 @@ npm exec --offline -- npr verify --artifacts /path/to/retained-artifacts
 
 Those version/next-development defaults describe `ReleaseWorkflow`. Export `new SemanticReleaseWorkflow()` to opt into Conventional Commits versioning and generated notes instead; it leaves next-development preparation disabled unless configured. See [Semantic Releases](semantic.md) for policies and replacement classes. The same CLI commands and Actions inputs apply.
 
-`verify` reads `release.json` and its archive, checks the remote lightweight release tag and explicit registry version (skipped for [releases without a registry](#releases-without-a-registry)), and never publishes, commits, pushes, or creates hosted releases. Supply the complete retained directory; do not substitute a rebuilt archive.
+`verify` reads `release.json` and its archive, checks the remote lightweight release tag and explicit registry version (skipped for [releases without a registry](#releases-without-a-registry); the [Chrome Web Store](#chrome-web-store) review state for its publisher), and never publishes, commits, pushes, or creates hosted releases. Supply the complete retained directory; do not substitute a rebuilt archive.
 
 `prepare` stops after validation, archive construction, local tagging, and bundle creation, without publishing or pushing. Preserve the entire directory durably before invoking `release` with the same intended checkout and inputs. Release independently repeats preparation and reconciles matching outputs; there is no restoration command. Both accept `--config`, `--version`, and `--artifacts`; see [Recovery and Reconciliation](recovery.md).
 
@@ -250,7 +250,142 @@ Install `npm-package-release@0.3.0` as an exact development dependency, set the 
 
 Archives are byte-reproducible: entries are sorted by path, every entry is a deflated file with mode `0644` and the `SOURCE_DATE_EPOCH` timestamp (as a DOS time in UTC, no earlier than 1980), and there are no directory entries, extra fields, or comments. Compression uses the zlib built into Node.js, so rebuild with the same Node.js version to reproduce the same bytes; the reusable workflow does so for prepare and release. The build directory must contain at least one file and no empty directories, Git metadata, sockets, or similar files. Symbolic links to files inside the directory are stored as regular files; links that escape it, dangle, or point to directories fail.
 
-Instead of installing an npm package, the artifact check reads the zip, verifies every entry's checksum, requires its files and contents to match the built directory exactly, extracts it into a temporary directory, and passes that directory to `validateArtifact` as `consumer`. Recovery and `npr verify` compare the retained zip's SHA-512 `integrity` and SHA-1 `shasum` like an npm tarball; `npr verify` recognizes a retained `.zip` and checks it without a build. Projects can implement the optional `bind({ cwd, run, env })` method, as `ZipArchive` does, to receive each invocation's directory, command runner, and environment.
+Instead of installing an npm package, the artifact check reads the zip, verifies every entry's checksum, requires its files and contents to match the built directory exactly, extracts it into a temporary directory, and passes that directory to `validateArtifact` as `consumer`. Recovery and `npr verify` compare the retained zip's SHA-512 `integrity` and SHA-1 `shasum` like an npm tarball; `npr verify` recognizes a retained `.zip` and checks it without a build. Projects and publishers can implement the optional `bind({ cwd, run, env })` method, as `ZipArchive` and `ChromeWebStore` do, to receive each invocation's directory, command runner, and environment. To also submit the zip to the Chrome Web Store, use the [`ChromeWebStore`](#chrome-web-store) publisher instead of `publisher: null`.
+
+## Chrome Web Store
+
+`ChromeWebStore` is a publisher that uploads the exact [`ZipArchive`](#zip-archives) of a browser extension to an existing [Chrome Web Store](https://developer.chrome.com/docs/webstore/) item and submits it for review, using the [Chrome Web Store API v2](https://developer.chrome.com/docs/webstore/using-api). The GitHub Release still receives the same zip. For example, `npr.config.js` for an extension built into `build/` with a `public/manifest.json` version:
+
+```js
+import { ChromeWebStore, IntrideaChangelog, ReleaseWorkflow, ZipArchive } from "npm-package-release";
+
+export default new ReleaseWorkflow({
+  changelog: new IntrideaChangelog("CHANGELOG.md", { placeholder: "* Your contribution here." }),
+  project: new ZipArchive({ build: ["npm", "run", "build"], directory: "build", name: "example-extension" }),
+  publisher: new ChromeWebStore({
+    publisherId: "YOUR_PUBLISHER_ID",
+    itemId: "abcdefghijklmnopabcdefghijklmnop",
+  }),
+  versionReferences: {
+    "public/manifest.json": [/"version": "(?<version>\d+\.\d+\.\d+)"/u],
+  },
+});
+```
+
+Its caller `.github/workflows/release.yml`, using keyless [Workload Identity Federation](#keyless-workload-identity-federation):
+
+```yaml
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional numeric release version.
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    name: Release Extension
+    uses: dblock/npm-package-release/.github/workflows/release.yml@v0.3.0
+    with:
+      version: ${{ inputs.version }}
+      google-workload-identity-provider: projects/123456789/locations/global/workloadIdentityPools/github/providers/example-extension
+      google-service-account: chrome-web-store@example-project.iam.gserviceaccount.com
+```
+
+To use a [service account key](#service-account-key) instead, omit both `google-*` inputs and pass the `release` environment secret:
+
+```yaml
+jobs:
+  release:
+    name: Release Extension
+    uses: dblock/npm-package-release/.github/workflows/release.yml@v0.3.0
+    with:
+      version: ${{ inputs.version }}
+    secrets:
+      CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY: ${{ secrets.CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY }}
+```
+
+A release then validates, builds, and zips the extension like any `ZipArchive` release, uploads that zip to the store, submits it for review (the `publishing` and `published` phases), tags and pushes, attaches the zip to the GitHub Release, prepares the next development version, and reports the store's review state. Review usually takes [a few days and can take a few weeks](https://developer.chrome.com/docs/webstore/review-process), so a successful release normally ends `not yet published (PENDING_REVIEW)` with `verification: "unverified"`; a pending review is not a failure. The approved revision is published automatically unless `publishType` is `"STAGED_PUBLISH"`.
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `publisherId` | Required | Publisher ID shown in the Developer Dashboard's **Account** section. |
+| `itemId` | Required | The existing item's 32-character extension ID. The API cannot create items; publish the first version and complete the **Store listing** and **Privacy** tabs in the Developer Dashboard. |
+| `token` | `new ChromeWebStoreCredentials()` | An access token source: `CHROME_WEB_STORE_ACCESS_TOKEN` when set, otherwise a `CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY` JSON key. `new EnvironmentAccessToken(name)` and `new ServiceAccountKey(name)` read other variables, and any object with an asynchronous `token({ env, fetch })` method can supply one. |
+| `publishType` | Store default (`DEFAULT_PUBLISH`) | `"STAGED_PUBLISH"` holds the approved revision until you publish it in the Developer Dashboard. |
+| `deployPercentage` | Store setting | Initial rollout percentage from 0 to 100; the store allows partial rollout only for items with more than 10,000 seven-day active users. |
+| `polling` | `{ attempts: 6, delay: 10000 }` | Bounded polling while an upload is still processing and while verification cannot yet see the submission, as for `RegistryVisibility`. |
+
+Tokens are read from the environment of each invocation and never written to configuration, `release.json`, logs, or error messages. Release commands such as `npm test` run in the same environment, as with any job secret. The publisher uses Node.js `fetch` and `node:crypto`, with no additional dependencies.
+
+### Store Reconciliation
+
+The store reports versions, not package checksums, so the publisher reconciles by the `version` in the zip's `manifest.json`, which must match the release version (use `versionReferences`, as above). Before any upload, and again during initialization so that problems fail before tagging, it reads the item's status with `fetchStatus`:
+
+| Store State | Result |
+| --- | --- |
+| This version is published, or submitted and pending review, staged, or published | Reused: no upload or submission. |
+| A lower version is published, or a lower submission was rejected or cancelled | Upload the exact retained zip, then submit it for review. |
+| A later version is published or submitted | Fail: the store requires an increasing version. |
+| A different version is pending review or staged | Fail: wait for its review or cancel it in the Developer Dashboard. |
+| This version was rejected or its submission cancelled | Fail: inspect the Developer Dashboard; release a new version. |
+| An upload is still processing, or the item was taken down | Fail: inspect the Developer Dashboard. |
+
+An upload whose processing continues is polled within `polling` bounds; a failed upload, a different uploaded version, or an upload rejected by the store fails before submission. A network error or server error during upload leaves its result unknown: the publisher never retries it or submits, and tells you to inspect the Developer Dashboard first. A submission whose response is lost is accepted only when the store then reports the version; it is never submitted again. The store does not report drafts that were never submitted, so a rerun after an upload whose submission failed uploads the same zip again.
+
+`release.json` records the store as `registry: { "kind": "chrome-web-store", "name": "Chrome Web Store", "publisherId": "…", "itemId": "…" }` (identifiers only, never credentials) and the last store state as `registryStatus`. `npr verify` reads them, needs the same credential variables, and never uploads or submits:
+
+| Store State for the Version | `verification` | `registryStatus` |
+| --- | --- | --- |
+| Published publicly or to trusted testers | `verified` | `PUBLISHED` or `PUBLISHED_TO_TESTERS` |
+| Pending review or staged | `unverified` | `PENDING_REVIEW` or `STAGED` |
+| Replaced by a later version | `unverified` | `SUPERSEDED` |
+| Not visible after `polling` attempts | `unverified` | `NOT_FOUND` |
+| Rejected, cancelled, or taken down | `failed`, with exit status 1 | Unchanged |
+
+Run `npr verify --artifacts PATH` with the retained artifacts after review to record the outcome, or check the Developer Dashboard.
+
+### Store Setup
+
+Complete these steps once, with a Google Account that has [2-step verification](https://developer.chrome.com/docs/webstore/using-api) and owns the publisher account:
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/), create or select a project, search for **Chrome Web Store API**, and enable it.
+2. In **IAM & Admin → Service Accounts**, create a service account, for example `chrome-web-store@YOUR_PROJECT.iam.gserviceaccount.com`. It needs no project roles.
+3. In the [Developer Dashboard](https://chrome.google.com/webstore/devconsole), open the **Account** section, add the service account email, and note the publisher ID. A publisher can have only [one service account](https://developer.chrome.com/docs/webstore/service-accounts).
+4. Copy the item's extension ID from the Developer Dashboard into `itemId`.
+5. Configure one of the authentication methods below, and create the `release` environment and direct-push branch rules from [New Project Setup](#2-configure-github). No npm setup is needed.
+
+#### Keyless Workload Identity Federation
+
+The reusable workflow's `google-workload-identity-provider` and `google-service-account` inputs run [`google-github-actions/auth`](https://github.com/google-github-actions/auth) before preparation, exchanging the job's GitHub OIDC token for a one-hour access token of the service account with the `https://www.googleapis.com/auth/chromewebstore` scope, and pass it to the CLI as `CHROME_WEB_STORE_ACCESS_TOKEN`. It writes no credentials file into the checkout. With the [gcloud CLI](https://cloud.google.com/sdk/docs/install), replacing the project, numbers, and repository:
+
+```sh
+gcloud iam workload-identity-pools create github --project=YOUR_PROJECT --location=global --display-name="GitHub Actions"
+gcloud iam workload-identity-pools providers create-oidc example-extension --project=YOUR_PROJECT --location=global \
+  --workload-identity-pool=github --issuer-uri=https://token.actions.githubusercontent.com \
+  --attribute-mapping=google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.environment=assertion.environment \
+  --attribute-condition="assertion.repository == 'YOUR_OWNER/YOUR_REPO' && assertion.environment == 'release'"
+gcloud iam service-accounts add-iam-policy-binding chrome-web-store@YOUR_PROJECT.iam.gserviceaccount.com --project=YOUR_PROJECT \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/YOUR_OWNER/YOUR_REPO"
+gcloud iam workload-identity-pools providers describe example-extension --project=YOUR_PROJECT --location=global \
+  --workload-identity-pool=github --format="value(name)"
+```
+
+Pass the printed provider name as `google-workload-identity-provider` and the service account email as `google-service-account`. The token is generated by impersonating the linked service account, the same mechanism as the documented `gcloud auth print-access-token --impersonate-service-account`; federated identities without a service account cannot be linked in the Developer Dashboard. A run that takes longer than an hour between authentication and verification needs a longer `access_token_lifetime`, which this workflow does not configure.
+
+#### Service Account Key
+
+Alternatively, create a JSON key for the service account in **IAM & Admin → Service Accounts → Keys**, store its entire contents as the `CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY` secret of the `release` environment, and pass it from the caller as shown above. The publisher signs a JWT with `node:crypto` and exchanges it at `https://oauth2.googleapis.com/token` for an access token. Keys are long-lived credentials: prefer Workload Identity Federation, restrict the secret to the `release` environment, and rotate or delete keys you no longer use.
+
+For the [composite action](#github-actions), set `CHROME_WEB_STORE_ACCESS_TOKEN` from your own `google-github-actions/auth` step output, or `CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY` from a secret, in the `env` of the step that uses the action. Locally, export either variable, for example `CHROME_WEB_STORE_ACCESS_TOKEN="$(gcloud auth print-access-token --impersonate-service-account=SERVICE_ACCOUNT_EMAIL --scopes=https://www.googleapis.com/auth/chromewebstore)"`.
 
 ## GitHub Actions Releases
 
@@ -355,7 +490,7 @@ The default release and verification return retained state snapshots. A custom w
 
 Copy [the caller example](../examples/release.yml) to the consumer's `.github/workflows/release.yml`. It uses `workflow_dispatch`, grants `contents: write` and `id-token: write`, and calls this repository's reusable `release.yml` at the matching release tag. Keep `npm-package-release@0.3.0` installed in the caller's locked development dependencies.
 
-The reusable workflow accepts `node-version` (26), `npm-version` (12), `config` (`npr.config.js`), optional `version`, `timezone` (UTC), and `build` (`false`). Runtime/tooling versions must be compatible with each other and the caller's package. It runs only for manual dispatch on the default branch, uses the `release` environment and repository-level concurrency, installs dependencies without caching, configures Git identity, prepares the release, requires a successful artifact upload, then runs release with the original inputs. It always attempts a separate diagnostic-artifact upload.
+The reusable workflow accepts `node-version` (26), `npm-version` (12), `config` (`npr.config.js`), optional `version`, `timezone` (UTC), `build` (`false`), and the optional [Chrome Web Store](#chrome-web-store) `google-workload-identity-provider` and `google-service-account` inputs and `CHROME_WEB_STORE_SERVICE_ACCOUNT_KEY` secret. Runtime/tooling versions must be compatible with each other and the caller's package. It runs only for manual dispatch on the default branch, uses the `release` environment and repository-level concurrency, installs dependencies without caching, configures Git identity, prepares the release, requires a successful artifact upload, then runs release with the original inputs. It always attempts a separate diagnostic-artifact upload.
 
 Set `build: true` to run `npm run build` after dependency installation and before invoking the CLI. This library's own [self-release caller](../.github/workflows/self-release.yml) uses that option to build and release the checkout through the same reusable workflow. Consumers using the installed package normally leave it `false`.
 

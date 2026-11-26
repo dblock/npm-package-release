@@ -23,10 +23,17 @@ export { NpmPackage } from "./package.js";
 export { ZipArchive } from "./zip.js";
 export type { ZipArchiveOptions, ZipEntry } from "./zip.js";
 export { GitHubAction, actionEntryPoints } from "./action.js";
+export {
+  ChromeWebStore, ChromeWebStoreCredentials, EnvironmentAccessToken, ServiceAccountKey, chromeWebStoreScope,
+  compareChromeVersions, extensionVersion,
+} from "./chrome.js";
+export type {
+  AccessTokenContext, AccessTokenSource, ChromeItemState, ChromeItemStatus, ChromeRevision, ChromeWebStoreOptions, Fetch,
+} from "./chrome.js";
 export type { GitHubActionOptions, ActionBuild } from "./action.js";
 export {
   NumericPatchVersions, MarkdownChangelog, KeepAChangelog, IntrideaChangelog,
-  GitHubReleaseHost, HookValidator, DirectoryReleaseStore, RegistryVisibility,
+  GitHubReleaseHost, HookValidator, DirectoryReleaseStore, RegistryVisibility, registryVerifier,
 } from "./services.js";
 export {
   InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, PublishArtifact,

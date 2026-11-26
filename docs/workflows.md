@@ -74,13 +74,13 @@ Use [Lifecycle Hooks](hooks.md) to add ordered before/after behavior to either s
 | --- | --- | --- |
 | `repository` | `ReleaseRepository` | `Git`, including trusted staging, concurrency guards, atomic release pushes, ref verification, and optional `floatingTags`/`verifyFloatingTags` methods for [floating tags](usage.md#floating-tags). |
 | `project` | `PackageProject` | `NpmPackage`, including manifest/lockfile updates, packing, strict consumers, and archive checks; [`ZipArchive`](usage.md#zip-archives) for a reproducible zip of a build directory; or [`GitHubAction`](usage.md#github-actions-releases) for a reproducible build commit tagged on top of the release commit. A project's artifact may set `commit` to the commit the release tag points at. An optional `bind({ cwd, run, env })` returns a project for each invocation. |
-| `publisher` | `PackagePublisher` | `NpmPackage`, including registry lookup, checksum reconciliation, and exact-archive publication, or `null` for [releases without a registry](usage.md#releases-without-a-registry). |
+| `publisher` | `PackagePublisher` | `NpmPackage`, including registry lookup, checksum reconciliation, and exact-archive publication; [`ChromeWebStore`](usage.md#chrome-web-store), uploading an extension zip and submitting it for review; or `null` for [releases without a registry](usage.md#releases-without-a-registry). An optional `bind({ cwd, run, env })` returns a publisher for each invocation; `checksums: false` marks a registry that reconciles by version only; and `registry` describes a non-npm registry in `release.json`. |
 | `changelog` | `Changelog` | `KeepAChangelog`; choose `IntrideaChangelog` or a custom class, or `null` to skip built-in notes. |
 | `versions` | `VersionPolicy` | `NumericPatchVersions`, selecting the requested/current version and the next patch. |
 | `host` | `ReleaseHost` | `GitHubReleaseHost`, or `null` to skip hosting. |
 | `validator` | `ReleaseValidator` | `HookValidator`, adapting validation hooks or running npm tests/lint. |
 | `store` | `ReleaseStore` | `DirectoryReleaseStore`, creating a recovery directory and atomically replacing diagnostic JSON. |
-| `verifier` | `RegistryVerifier` | `RegistryVisibility`, bounded fresh lookups against the selected publisher; `null` when `publisher` is `null`. |
+| `verifier` | `RegistryVerifier` | The publisher itself when it implements `verify`, as `ChromeWebStore` does, otherwise `RegistryVisibility`, bounded fresh lookups against the selected publisher; `null` when `publisher` is `null`. `verify` returns `"verified"`, `"unverified"`, or `{ verification, status }`, whose `status` is recorded as `registryStatus`. |
 
 For example, replace next-version selection with a class instead of changing the runner:
 

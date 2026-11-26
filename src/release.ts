@@ -5,6 +5,7 @@ import { Git } from "./git.js";
 import { NpmPackage } from "./package.js";
 import { ZipArchive } from "./zip.js";
 import { GitHubAction } from "./action.js";
+import { ChromeWebStore } from "./chrome.js";
 import { Workflow } from "./workflow.js";
 import { lifecycleOptions } from "./lifecycle.js";
 import { currentExecutionProvider } from "./execution.js";
@@ -12,7 +13,7 @@ import type { ExecutionContext, ExecutionProvider } from "./execution.js";
 import type { Step } from "./workflow.js";
 import type { ReleaseConfig, ReleaseOptions, ReleaseState, VerifyOptions } from "./contracts.js";
 import {
-  DirectoryReleaseStore, HookValidator, NumericPatchVersions, RegistryVisibility,
+  DirectoryReleaseStore, HookValidator, NumericPatchVersions, registryVerifier,
 } from "./services.js";
 import {
   InitializeRelease, PrepareRelease, ValidateRelease, CommitRelease, BuildArtifact, PublishArtifact,
@@ -85,12 +86,14 @@ export async function verify({
   const store = services.store || new DirectoryReleaseStore(await artifactDirectory(cwd, execute, artifacts));
   const state = await store.read();
   const npm = new NpmPackage(cwd, execute);
-  const publisher = state.registry === false ? null : services.publisher || npm;
+  const chrome = typeof state.registry === "object" && state.registry?.kind === "chrome-web-store"
+    ? new ChromeWebStore({ publisherId: state.registry.publisherId, itemId: state.registry.itemId, env }) : null;
+  const publisher = state.registry === false ? null : services.publisher || chrome || npm;
   return verifyRetained(log, provider, {
     repository: services.repository || new Git(execute, { branch: state.branch, remote: state.remote }),
     project: services.project || (state.artifact?.commit !== undefined ? new GitHubAction({ cwd, run: execute, env })
       : state.artifact?.filename?.endsWith(".zip") ? new ZipArchive({ cwd, run: execute, env }) : npm), publisher, store,
-    verifier: publisher ? services.verifier || new RegistryVisibility(publisher) : null,
+    verifier: publisher ? services.verifier || registryVerifier(publisher) : null,
     changelog: services.changelog || null, host: services.host || null,
     validator: services.validator || new HookValidator(), versions: services.versions || new NumericPatchVersions(),
   });

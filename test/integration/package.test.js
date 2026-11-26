@@ -17,6 +17,7 @@ import { checkSelfRelease } from "../helpers/self-release.js";
 import { checkLifecycle } from "../helpers/lifecycle.js";
 import { checkMarkdownSection, checkMarkdownSubstitutions } from "../helpers/markdown.js";
 import { checkRecursiveCopying, checkGitMetadataCopying, checkGlobCopying } from "../helpers/testing.js";
+import { checkChromeWebStore } from "../helpers/chrome.js";
 
 test("the actual tarball installs with strict engines and exposes its API and CLI", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "npm-package-release-consumer-"));
@@ -102,9 +103,10 @@ test("the actual tarball installs with strict engines and exposes its API and CL
   await checkSemanticRelease(t, installedApi);
   await checkGeneratedChangelog(t, installedApi);
   await checkSelfRelease(t, join(consumer, "node_modules/npm-package-release"));
+  await checkChromeWebStore(t, installedApi, installedTestingApi);
   const typed = join(consumer, "consumer.ts");
   await writeFile(typed, `
-import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection, GeneratedChangelog, ZipArchive, GitHubAction } from "npm-package-release";
+import { Workflow, InitializeRelease, PrepareRelease, PublishArtifact, LocalExecutionProvider, ReleaseWorkflow, prepare, release, SemanticReleaseWorkflow, AnalyzeSemanticRelease, InitializeSemanticRelease, KeepAChangelog, IntrideaChangelog, HookValidator, LifecycleHooks, MarkdownSection, GeneratedChangelog, ZipArchive, GitHubAction, ChromeWebStore, EnvironmentAccessToken } from "npm-package-release";
 import type { Step, ReleaseOptions, PreparedRelease, ExecutionContext, LifecycleHook, LifecycleContext } from "npm-package-release";
 import { ReleaseTestProject, TestPublisher, TestReleaseHost } from "npm-package-release/testing";
 export async function commitContract(repository: import("npm-package-release").ReleaseRepository, tree: string) {
@@ -215,6 +217,15 @@ new ReleaseWorkflow({ floatingTags: ["patch"] });
 export async function actionBranch() { return (await ReleaseTestProject.create({ branch: "main" })).branch; }
 // @ts-expect-error GitHub Action builds run an argument array without a shell.
 new GitHubAction({ build: "npm run build" });
+new ReleaseWorkflow({
+  project: new ZipArchive({ name: "example-extension" }),
+  publisher: new ChromeWebStore({ publisherId: "example-publisher", itemId: "abcdefghijklmnopabcdefghijklmnop", token: new EnvironmentAccessToken() }),
+});
+export async function storeStatus(store: ChromeWebStore) {
+  (await store.verify({ name: "x", version: "1.0.0", artifact: { filename: "x.zip", integrity: "", shasum: "" } }, { attempts: 1, delay: 0 }, () => {})).status satisfies string;
+}
+// @ts-expect-error Chrome Web Store tokens come from a token source, not a configured string.
+new ChromeWebStore({ publisherId: "p", itemId: "abcdefghijklmnopabcdefghijklmnop", token: "secret" });
 // @ts-expect-error Releases without a registry cannot verify registry visibility.
 String(new ReleaseWorkflow({ publisher: null }).prepare().then((built) => built.runtime.services.verifier.options));
 `);

@@ -28,6 +28,7 @@ export function snapshot<State extends ReleaseState>(state: State): Readonly<Sta
     verificationOptions: Object.freeze({ ...state.verificationOptions }),
     ...(state.artifact ? { artifact: Object.freeze({ ...state.artifact }) } : {}),
     ...(state.floatingTags ? { floatingTags: Object.freeze([...state.floatingTags]) } : {}),
+    ...(state.registry ? { registry: Object.freeze({ ...state.registry }) } : {}),
     ...(state.semantic ? { semantic: semanticPlan(state.semantic) } : {}),
   });
 }
@@ -183,6 +184,12 @@ export class DirectoryReleaseStore implements ReleaseStore {
     await writeFile(join(this.directory, "release.json.tmp"), JSON.stringify(state, null, 2) + "\n");
     await rename(join(this.directory, "release.json.tmp"), join(this.directory, "release.json"));
   }
+}
+
+/** A publisher that verifies its own registry, such as `ChromeWebStore`, or bounded `RegistryVisibility` lookups. */
+export function registryVerifier(publisher: PackagePublisher): RegistryVerifier {
+  const candidate = publisher as PackagePublisher & Partial<RegistryVerifier>;
+  return typeof candidate.verify === "function" ? candidate as PackagePublisher & RegistryVerifier : new RegistryVisibility(publisher);
 }
 
 export class RegistryVisibility implements RegistryVerifier {
