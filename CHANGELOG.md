@@ -1,10 +1,9 @@
 # Changelog
 
-## 0.4.0 (Next)
+## 0.4.0 (2026/11/26)
 
 - [#60](https://github.com/dblock/npm-package-release/pull/60): Document reserving a new package name with a `0.0.0` placeholder so the release workflow publishes the first real version through Trusted Publishing instead of a manual first release - [@dblock](https://github.com/dblock).
 - [#61](https://github.com/dblock/npm-package-release/pull/61): Add `npr reserve`, `npr trust`, and `npr bootstrap` to publish a deprecated `0.0.0` placeholder for a new npm name and configure GitHub Actions Trusted Publishing, with `--dry-run` previews - [@dblock](https://github.com/dblock).
-- Your contribution here.
 
 ## 0.3.0 (2026/11/25)
 
