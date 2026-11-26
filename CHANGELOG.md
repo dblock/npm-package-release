@@ -6,6 +6,7 @@
 - [#64](https://github.com/dblock/npm-package-release/pull/64): Document that `npr reserve` may not deprecate the `0.0.0` placeholder while npm is still processing a new package, and how to deprecate it after the first release - [@dblock](https://github.com/dblock).
 - [#66](https://github.com/dblock/npm-package-release/pull/66): Let the new-package commands run unchanged from a package checkout by reading the default branch, repository, package name, and version from `gh` and `package.json` instead of hard-coding `master` and placeholders - [@dblock](https://github.com/dblock).
 - [#67](https://github.com/dblock/npm-package-release/pull/67): Make the detailed usage guide self-contained by copying the installation, configuration, and release workflow steps instead of referring to the README - [@dblock](https://github.com/dblock).
+- [#68](https://github.com/dblock/npm-package-release/pull/68): Reject `versionReferences` and `releaseReferences` that select files under `.github/workflows/`, which a workflow's `GITHUB_TOKEN` cannot push, when the workflow is constructed and before references are written - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.4.0 (2026/11/26)

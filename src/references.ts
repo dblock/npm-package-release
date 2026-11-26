@@ -6,6 +6,31 @@ import type { Command } from "./contracts.js";
 
 export type VersionReferenceMap = Readonly<Record<string, readonly RegExp[]>>;
 
+const MATCH_OPTIONS = { dot: true, nonegate: true, nocomment: true, platform: "linux" } as const;
+const WORKFLOWS = ".github/workflows/";
+const WORKFLOW_SAMPLES = [".github/workflows/release.yml", ".github/workflows/release.yaml"];
+
+function normalizedSelector(path: string): string {
+  return path.replace(/^(?:\.\/)+/u, "");
+}
+
+function workflowFile(path: string): boolean {
+  return path.toLowerCase().startsWith(WORKFLOWS);
+}
+
+function workflowError(subject: string): Error {
+  return new Error(`${subject}: GitHub does not let a workflow's GITHUB_TOKEN create or update files under ` +
+    `${WORKFLOWS}, so the release push would be rejected. Keep versions out of workflow files and read them at run time.`);
+}
+
+function rejectWorkflowSelector(path: string, option: string): void {
+  const selector = normalizedSelector(path);
+  const matcher = new Minimatch(selector, MATCH_OPTIONS);
+  if (workflowFile(selector) || (matcher.hasMagic() && WORKFLOW_SAMPLES.some((sample) => matcher.match(sample)))) {
+    throw workflowError(`${option} must not update ${path}`);
+  }
+}
+
 function selectorPath(path: string, option: string): void {
   if (!path || path.includes("\0") || path.includes("\\") || isAbsolute(path) || win32.isAbsolute(path) ||
     path.split("/").some((part) => part === ".." || part.toLowerCase() === ".git")) {
@@ -26,6 +51,7 @@ export function versionReferences(value: unknown, option: string): VersionRefere
   const references: Record<string, readonly RegExp[]> = Object.create(null);
   for (const [path, patterns] of Object.entries(value)) {
     selectorPath(path, option);
+    rejectWorkflowSelector(path, option);
     if (!Array.isArray(patterns) || !patterns.length || !patterns.every((pattern) => pattern instanceof RegExp)) {
       throw new Error(`${option} for ${path} must be a nonempty array of regular expressions.`);
     }
@@ -57,7 +83,7 @@ export async function updateReferences(
   if (!plan.length) return;
   const root = await realpath(cwd);
   const matchers = plan.map(({ selector }) => {
-    const matcher = new Minimatch(selector.replace(/^(?:\.\/)+/u, ""), { dot: true, nonegate: true, nocomment: true, platform: "linux" });
+    const matcher = new Minimatch(normalizedSelector(selector), MATCH_OPTIONS);
     return matcher.hasMagic() ? matcher : null;
   });
   const tracked = matchers.some(Boolean)
@@ -66,8 +92,9 @@ export async function updateReferences(
   const files = new Map<string, { path: string; selections: Selection[] }>();
   for (const [index, selection] of plan.entries()) {
     const matcher = matchers[index];
-    const paths = matcher ? tracked.filter((path) => matcher.match(path)) : [selection.selector.replace(/^(?:\.\/)+/u, "")];
+    const paths = matcher ? tracked.filter((path) => matcher.match(path)) : [normalizedSelector(selection.selector)];
     for (const path of paths) {
+      if (workflowFile(path)) throw workflowError(`Version reference ${selection.selector} must not update ${path}`);
       const file = files.get(path) || { path, selections: [] };
       file.selections.push(selection);
       files.set(path, file);
