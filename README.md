@@ -64,11 +64,31 @@ Merge the caller and locked development dependency into your default branch. Upg
 
 ### 3. Enable Trusted Publishing
 
-In **your GitHub repository → Settings → Environments**, create `release`, restrict it to your default branch, and optionally require maintainer approval. Branch rules must allow release commits/tags to be pushed; see [setup and branch permissions](docs/usage.md#new-project-setup).
+Trusted Publishing needs an npm trusted publisher, configured differently for new and existing npm packages; GitHub creates the `release` environment on the first run. No npm publish token or `NODE_AUTH_TOKEN` is needed. Branch rules must also allow the workflow to push release commits and tags; see [setup and branch permissions](docs/usage.md#2-configure-github).
 
-**New npm package:** npm configures Trusted Publishing only for an existing package. When you are ready to release, log in to npm and run `npm exec --offline -- npr bootstrap` (preview with `--dry-run`): it [reserves the name with a deprecated `0.0.0` placeholder](docs/usage.md#1-reserve-the-package-name) and configures the publisher below, and the workflow then publishes your real first version. `npr reserve` and `npr trust` run the two steps separately.
+#### New npm Package
 
-**Existing npm package:** run `npm exec --offline -- npr trust`, or open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
+npm configures Trusted Publishing only for an existing package, so reserve the name with a [deprecated `0.0.0` placeholder](docs/usage.md#1-reserve-the-package-name) and configure the publisher in one step when you are ready to release. Preview, log in, and run it:
+
+```sh
+npm exec --offline -- npr bootstrap --dry-run
+npm login --registry=https://registry.npmjs.org
+npm exec --offline -- npr bootstrap
+```
+
+npm prompts for 2FA in your terminal or browser. `npr reserve` and `npr trust` run the two steps separately. Check that `npm trust list` output shows your repository, `release.yml`, environment `release`, and direct publishing. The workflow then publishes your real first version, such as `0.1.0`; keep that version unpublished in `package.json`.
+
+#### Existing npm Package
+
+Preview, log in, and configure the publisher:
+
+```sh
+npm exec --offline -- npr trust --dry-run
+npm login --registry=https://registry.npmjs.org
+npm exec --offline -- npr trust
+```
+
+Alternatively, open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
 
 | Field | Value |
 | --- | --- |
@@ -78,7 +98,18 @@ In **your GitHub repository → Settings → Environments**, create `release`, r
 | Environment name | `release`. |
 | Allowed actions | Enable direct `npm publish`, not stage-only. |
 
-No npm publish token or `NODE_AUTH_TOKEN` is needed. A new publisher must successfully publish within [two days](https://docs.npmjs.com/trusted-publishers/) or expire; configure it when you are ready to release.
+A new publisher must successfully publish within [two days](https://docs.npmjs.com/trusted-publishers/) or expire, so configure it when you are ready to release.
+
+#### Restrict the Release Environment
+
+The auto-created `release` environment accepts any branch, and the npm publisher does not check branches. Optionally restrict it so that only your default branch can publish:
+
+```sh
+gh api -X PUT "repos/{owner}/{repo}/environments/release" -F "deployment_branch_policy[protected_branches]=false" -F "deployment_branch_policy[custom_branch_policies]=true"
+gh api -X POST "repos/{owner}/{repo}/environments/release/deployment-branch-policies" -f name=master -f type=branch
+```
+
+Replace `master` with your default branch. See [Restrict the Release Environment](docs/usage.md#restrict-the-release-environment) for when this matters and how to verify it.
 
 ### 4. Make a Release
 
