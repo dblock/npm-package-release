@@ -20,6 +20,8 @@ export type {
 } from "./execution.js";
 export { Git, buildCommitMessage, floatingTagNames } from "./git.js";
 export { NpmPackage } from "./package.js";
+export { bootstrap, reserve, trust } from "./bootstrap.js";
+export type { BootstrapOptions, InteractiveCommand } from "./bootstrap.js";
 export { ZipArchive } from "./zip.js";
 export type { ZipArchiveOptions, ZipEntry } from "./zip.js";
 export { GitHubAction, actionEntryPoints } from "./action.js";

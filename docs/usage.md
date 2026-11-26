@@ -12,17 +12,16 @@ First complete [README steps 1-2](../README.md#usage) in **your package's reposi
 
 ### 1. Reserve the Package Name
 
-Skip this step if your package is already published. npm accepts a trusted publisher only for an existing package, so reserve a new name with an empty `0.0.0` placeholder and let the release workflow publish your real first version. Keep your checked-in version at an unpublished `0.1.0`. In an empty directory outside your repository, authenticate, publish the placeholder, and deprecate it:
+Skip this step if your package is already published. npm accepts a trusted publisher only for an existing package, so reserve a new name with an empty `0.0.0` placeholder and let the release workflow publish your real first version. Keep your checked-in version at an unpublished `0.1.0`. From your package's checkout, preview, authenticate, and reserve the name:
 
 ```sh
-printf '{"name":"YOUR_PACKAGE","version":"0.0.0","description":"Placeholder reserving this name. Install a later version.","license":"YOUR_LICENSE"}\n' > package.json
+npm exec --offline -- npr reserve --dry-run
 npm login --registry=https://registry.npmjs.org
-npm publish --access public --registry=https://registry.npmjs.org
-npm deprecate YOUR_PACKAGE@0.0.0 "Placeholder reserving this name. Install a later version." --registry=https://registry.npmjs.org
+npm exec --offline -- npr reserve
 npm view YOUR_PACKAGE versions --json --registry=https://registry.npmjs.org
 ```
 
-Complete browser 2FA yourself, and use your package's actual name, including any scope, and license. The placeholder contains only `package.json` and stays `latest` until the workflow publishes `0.1.0`. Do not create a Git tag or GitHub Release for it.
+`npr reserve` reads the name, license, and repository URL from `package.json`; `--name` and `--license` override them. It fails if the name already exists, then publishes a placeholder containing only `package.json` from a temporary directory and deprecates it. npm prompts for 2FA in your terminal or browser; complete it yourself. The placeholder stays `latest` until the workflow publishes `0.1.0`. Deprecation does not delay later publication. Do not create a Git tag or GitHub Release for it.
 
 ### 2. Configure GitHub
 
@@ -35,9 +34,11 @@ Have an authorized administrator allow the workflow to push release/next-version
 Authenticate to npm, then add and inspect the publisher:
 
 ```sh
-npm trust github YOUR_PACKAGE --repo YOUR_OWNER/YOUR_REPO --file release.yml --env release --allow-publish --registry=https://registry.npmjs.org
-npm trust list YOUR_PACKAGE --json --registry=https://registry.npmjs.org
+npm exec --offline -- npr trust --dry-run
+npm exec --offline -- npr trust
 ```
+
+`npr trust` runs `npm trust github` with direct-publish permission, then `npm trust list`. It infers the GitHub repository from `package.json` `repository`, then the `origin` remote; override it with `--repo YOUR_OWNER/YOUR_REPO`, the calling workflow with `--file` (default `release.yml`), and the environment with `--env` (default `release`). `npr bootstrap` validates both steps' inputs, then runs `npr reserve` and `npr trust` together; use it when you are ready to release immediately.
 
 Use the calling workflow's filename, not the reusable workflow's filename. Check that the saved owner, repository, filename, environment, and direct-publish permission match. Do not add an npm token or `NODE_AUTH_TOKEN` to GitHub secrets. A new publisher must successfully publish within [two days](https://docs.npmjs.com/trusted-publishers/), so configure it when you are ready for your first release.
 
@@ -57,11 +58,16 @@ Use your actual next unpublished version. After preparation, verify the run summ
 
 ```sh
 npm exec --offline -- npr --help
+npm exec --offline -- npr reserve [--name NAME] [--license SPDX] [--dry-run]
+npm exec --offline -- npr trust [--name NAME] [--repo OWNER/REPO] [--file release.yml] [--env release] [--dry-run]
+npm exec --offline -- npr bootstrap [--name NAME] [--license SPDX] [--repo OWNER/REPO] [--file release.yml] [--env release] [--dry-run]
 npm exec --offline -- npr release
 npm exec --offline -- npr release --version 1.2.3 --config npr.config.js
 npm exec --offline -- npr prepare --artifacts /path/to/artifacts
 npm exec --offline -- npr verify --artifacts /path/to/retained-artifacts
 ```
+
+`reserve`, `trust`, and `bootstrap` set up a [new package](#new-project-setup). They mutate npm and prompt for authentication, except with `--dry-run`, which prints the placeholder and npm commands without contacting the registry. Programmatic callers can import `reserve`, `trust`, and `bootstrap` from `npm-package-release`.
 
 `--offline` prevents npm from downloading missing release tooling; install the package first. It does not make the release offline: child commands discard inherited npm-exec lookup flags so validation and consumer installs can access the registry. Explicit child-command flags such as `npm install --offline` still apply.
 

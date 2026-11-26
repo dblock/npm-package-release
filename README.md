@@ -66,7 +66,9 @@ Merge the caller and locked development dependency into your default branch. Upg
 
 In **your GitHub repository → Settings → Environments**, create `release`, restrict it to your default branch, and optionally require maintainer approval. Branch rules must allow release commits/tags to be pushed; see [setup and branch permissions](docs/usage.md#new-project-setup).
 
-**New npm package:** npm configures Trusted Publishing only for an existing package, so first [reserve its name with a `0.0.0` placeholder](docs/usage.md#1-reserve-the-package-name); the workflow publishes your real first version. Then open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
+**New npm package:** npm configures Trusted Publishing only for an existing package. When you are ready to release, log in to npm and run `npm exec --offline -- npr bootstrap` (preview with `--dry-run`): it [reserves the name with a deprecated `0.0.0` placeholder](docs/usage.md#1-reserve-the-package-name) and configures the publisher below, and the workflow then publishes your real first version. `npr reserve` and `npr trust` run the two steps separately.
+
+**Existing npm package:** run `npm exec --offline -- npr trust`, or open your package on the [npm website](https://www.npmjs.com), select **Settings → Trusted publishing**, add a **GitHub Actions** publisher, and set:
 
 | Field | Value |
 | --- | --- |
