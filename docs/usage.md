@@ -25,8 +25,6 @@ npm view YOUR_PACKAGE versions --json --registry=https://registry.npmjs.org
 
 ### 2. Configure GitHub
 
-In **Settings → Environments**, create `release` and allow deployments only from `master` (or your actual default branch).
-
 Have an authorized administrator allow the workflow to push release/next-version commits and release tags (and update `vX`/`vX.Y` tags when using [floating tags](#floating-tags)). Remove blocking PR requirements, but keep force-push/deletion protections and no bypass actors. This allows fast-forward direct pushes by **all writers**, not only Actions; ordinary development should still use PRs.
 
 ### 3. Configure Trusted Publishing
@@ -41,6 +39,24 @@ npm exec --offline -- npr trust
 `npr trust` runs `npm trust github` with direct-publish permission, then `npm trust list`. It infers the GitHub repository from `package.json` `repository`, then the `origin` remote; override it with `--repo YOUR_OWNER/YOUR_REPO`, the calling workflow with `--file` (default `release.yml`), and the environment with `--env` (default `release`). `npr bootstrap` validates both steps' inputs, then runs `npr reserve` and `npr trust` together; use it when you are ready to release immediately.
 
 Use the calling workflow's filename, not the reusable workflow's filename. Check that the saved owner, repository, filename, environment, and direct-publish permission match. Do not add an npm token or `NODE_AUTH_TOKEN` to GitHub secrets. A new publisher must successfully publish within [two days](https://docs.npmjs.com/trusted-publishers/), so configure it when you are ready for your first release.
+
+#### Restrict the Release Environment
+
+GitHub creates the `release` environment the first time the workflow runs, without protection rules, so a workflow dispatched from any branch can use it. The npm trusted publisher checks the repository, workflow filename, and environment, but not the branch. Restricting `release` to your default branch is optional: it matters when some writers can push branches but cannot merge to the default branch, because otherwise a dispatch from an edited branch could publish without review. With the PR requirement removed in [step 2](#2-configure-github), any writer can push to the default branch anyway. To restrict it, create or update `release`, allow only your default branch, and read both settings back:
+
+```sh
+repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+branch="$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)"
+gh api --method PUT "repos/$repo/environments/release" \
+  -F "deployment_branch_policy[protected_branches]=false" \
+  -F "deployment_branch_policy[custom_branch_policies]=true"
+gh api --method POST "repos/$repo/environments/release/deployment-branch-policies" \
+  -f name="$branch" -f type=branch
+gh api "repos/$repo/environments/release" --jq .deployment_branch_policy
+gh api "repos/$repo/environments/release/deployment-branch-policies" --jq '.branch_policies[] | "\(.type) \(.name)"'
+```
+
+The first read should print `{"custom_branch_policies":true,"protected_branches":false}` and the second `branch master` (or your default branch). Creating the environment is idempotent; adding a branch policy that already exists fails without changing anything. To require maintainer approval before each release, add reviewers in **Settings → Environments → release**.
 
 ### 4. Release From Actions
 
@@ -237,7 +253,7 @@ jobs:
       version: ${{ inputs.version }}
 ```
 
-Install `npm-package-release@0.4.0` as an exact development dependency, set the HTTPS GitHub `repository` URL in `package.json` (or pass `host: new GitHubReleaseHost(run, "owner/repo")`), ignore the build directory in `.gitignore`, and create the `release` environment and direct-push branch rules from [New Project Setup](#2-configure-github). No npm setup is needed. A release then runs `npm test` and `npm run lint`, sets the version in `package.json`, `package-lock.json`, and `public/manifest.json`, builds, zips, tags, pushes, attaches `example-extension-v1.0.0.zip` to the `v1.0.0` GitHub Release, and prepares `1.0.1` with a new `## 1.0.1 (Next)` section.
+Install `npm-package-release@0.4.0` as an exact development dependency, set the HTTPS GitHub `repository` URL in `package.json` (or pass `host: new GitHubReleaseHost(run, "owner/repo")`), ignore the build directory in `.gitignore`, and set up the direct-push branch rules from [New Project Setup](#2-configure-github), optionally [restricting the release environment](#restrict-the-release-environment). No npm setup is needed. A release then runs `npm test` and `npm run lint`, sets the version in `package.json`, `package-lock.json`, and `public/manifest.json`, builds, zips, tags, pushes, attaches `example-extension-v1.0.0.zip` to the `v1.0.0` GitHub Release, and prepares `1.0.1` with a new `## 1.0.1 (Next)` section.
 
 | Option | Default | Behavior |
 | --- | --- | --- |
@@ -291,7 +307,7 @@ jobs:
       version: ${{ inputs.version }}
 ```
 
-Install `npm-package-release@0.4.0` as an exact development dependency, set the HTTPS GitHub `repository` URL in `package.json` (or pass `host: new GitHubReleaseHost(run, "owner/repo")`), keep the build output in `.gitignore`, and create the `release` environment and direct-push branch rules from [New Project Setup](#2-configure-github) for your actual default branch. No npm setup is needed. Dispatching the workflow from `main` releases `1.0.0`:
+Install `npm-package-release@0.4.0` as an exact development dependency, set the HTTPS GitHub `repository` URL in `package.json` (or pass `host: new GitHubReleaseHost(run, "owner/repo")`), keep the build output in `.gitignore`, and set up the direct-push branch rules from [New Project Setup](#2-configure-github) for your actual default branch, optionally [restricting the release environment](#restrict-the-release-environment). No npm setup is needed. Dispatching the workflow from `main` releases `1.0.0`:
 
 1. Run `npm test` and `npm run lint`, set the version in `package.json` and `package-lock.json`, date `### 1.0.0 (Next)`, and commit `Prepare release 1.0.0` on `main`.
 2. Run the build, then create the build commit `Build release 1.0.0`: its only parent is the release commit and its tree is the release tree plus every file in `output`, added even though they are ignored. `action.yml` is unchanged.
