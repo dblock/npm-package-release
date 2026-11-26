@@ -4,13 +4,61 @@
 
 The default workflow uses one public root npm package on `registry.npmjs.org`, Node.js 22.14+, 24, or 26+, Git, and npm with Trusted Publishing support (11.5.1+; the workflow defaults to Node.js 26/npm 12). GitHub Releases additionally require `gh` and `GH_TOKEN`. A manifest must have a numeric version, no workspaces, and an optional matching `package-lock.json`. Built-in services do not support alternate registries, prerelease versions/channels, or workspace publication; [custom workflows](workflows.md) can supply their own classes and contracts. A project that is not published to a registry can [release only as a GitHub Release](#releases-without-a-registry), including [JavaScript GitHub Actions](#github-actions-releases).
 
-Install `npm-package-release@0.4.0` as an exact development dependency and commit the lockfile. The CLI is `npr`, not the unrelated npm package of that name. Upgrade the dependency and pinned workflow/action together.
+The CLI is `npr`, not the unrelated npm package of that name; see [Install and Configure](#1-install-and-configure). Upgrade the dependency and pinned workflow/action together.
 
 ## New Project Setup
 
-First complete [README steps 1-2](../README.md#usage) in **your package's repository**: install the tool, add `npr.config.js`, and merge `.github/workflows/release.yml`. Use Node.js 26/npm 12 for the commands below. Run the commands below from your package's checkout: they read the package name and version from `package.json`, and `gh` infers the GitHub repository and default branch from the checkout.
+Complete these steps in **your package's repository**. Use Node.js 26/npm 12 for the commands below, and run them from your package's checkout: they read the package name and version from `package.json`, and `gh` infers the GitHub repository and default branch from the checkout.
 
-### 1. Reserve the Package Name
+### 1. Install and Configure
+
+Install the tool as an exact development dependency and commit the lockfile:
+
+```sh
+npm install --save-dev --save-exact npm-package-release@0.4.0
+```
+
+Create `npr.config.js`:
+
+```js
+import { KeepAChangelog, ReleaseWorkflow } from "npm-package-release";
+
+export default new ReleaseWorkflow({
+  changelog: new KeepAChangelog(),
+});
+```
+
+Use a numeric package version, a GitHub `repository` URL, and a `CHANGELOG.md` with `## [Unreleased]` and real notes. `KeepAChangelog` is also the default when omitted. Default validation runs `npm test` and `npm run lint`. For CommonJS projects, use `npr.config.mjs` and set the workflow's `config` input accordingly.
+
+### 2. Add the Release Workflow
+
+Add `.github/workflows/release.yml`, using the caller in [`examples/release.yml`](../examples/release.yml):
+
+```yaml
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional numeric release version.
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    uses: dblock/npm-package-release/.github/workflows/release.yml@v0.4.0
+    with:
+      version: ${{ inputs.version }}
+```
+
+Merge the caller and locked development dependency into your default branch. Upgrade the package and pinned workflow together.
+
+### 3. Reserve the Package Name
 
 Skip this step if your package is already published. npm accepts a trusted publisher only for an existing package, so reserve a new name with an empty `0.0.0` placeholder and let the release workflow publish your real first version. Keep your checked-in version at an unpublished `0.1.0`. From your package's checkout, preview, authenticate, and reserve the name:
 
@@ -23,11 +71,11 @@ npm view "$(node -p "require('./package.json').name")" versions --json --registr
 
 `npr reserve` reads the name, license, and repository URL from `package.json`; `--name` and `--license` override them. It fails if the name already exists, then publishes a placeholder containing only `package.json` from a temporary directory and tries to deprecate it. npm prompts for 2FA in your terminal or browser; complete it yourself. npm processes a new package for a few minutes, so the deprecation can find no version (`npm warn deprecate No version found for 0.0.0`) and leave the placeholder without a deprecation notice; that is harmless, and you can [deprecate it after your first release](#deprecate-the-placeholder). The placeholder stays `latest` until the workflow publishes `0.1.0`. Deprecation does not delay later publication. Do not create a Git tag or GitHub Release for it.
 
-### 2. Configure GitHub
+### 4. Configure GitHub
 
 Have an authorized administrator allow the workflow to push release/next-version commits and release tags (and update `vX`/`vX.Y` tags when using [floating tags](#floating-tags)). Remove blocking PR requirements, but keep force-push/deletion protections and no bypass actors. This allows fast-forward direct pushes by **all writers**, not only Actions; ordinary development should still use PRs.
 
-### 3. Configure Trusted Publishing
+### 5. Configure Trusted Publishing
 
 Authenticate to npm, then add and inspect the publisher:
 
@@ -42,7 +90,7 @@ Use the calling workflow's filename, not the reusable workflow's filename. Check
 
 #### Restrict the Release Environment
 
-GitHub creates the `release` environment the first time the workflow runs, without protection rules, so a workflow dispatched from any branch can use it. The npm trusted publisher checks the repository, workflow filename, and environment, but not the branch. Restricting `release` to your default branch is optional: it matters when some writers can push branches but cannot merge to the default branch, because otherwise a dispatch from an edited branch could publish without review. With the PR requirement removed in [step 2](#2-configure-github), any writer can push to the default branch anyway. To restrict it, create or update `release`, allow only your default branch, and read both settings back:
+GitHub creates the `release` environment the first time the workflow runs, without protection rules, so a workflow dispatched from any branch can use it. The npm trusted publisher checks the repository, workflow filename, and environment, but not the branch. Restricting `release` to your default branch is optional: it matters when some writers can push branches but cannot merge to the default branch, because otherwise a dispatch from an edited branch could publish without review. With the PR requirement removed in [step 2](#4-configure-github), any writer can push to the default branch anyway. To restrict it, create or update `release`, allow only your default branch, and read both settings back:
 
 ```sh
 repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
@@ -58,7 +106,7 @@ gh api "repos/$repo/environments/release/deployment-branch-policies" --jq '.bran
 
 The first read should print `{"custom_branch_policies":true,"protected_branches":false}` and the second `branch master` (or your default branch). Creating the environment is idempotent; adding a branch policy that already exists fails without changing anything. To require maintainer approval before each release, add reviewers in **Settings → Environments → release**.
 
-### 4. Release From Actions
+### 6. Release From Actions
 
 Add your release notes, merge them, and run tests/lint. Dispatch the checked-in version, `0.1.0` for a new package:
 
@@ -220,7 +268,7 @@ A release without a registry requires a host: the default `GitHubReleaseHost` or
 
 `release.json` records `registry: false`. `npr verify` then checks the retained archive and the remote release tag, records `verified`, and writes a job summary without a registry lookup. Recovery reconciles Git refs and the hosted asset checksum as usual; there is no registry state to inspect.
 
-npm Trusted Publishing is not needed, so skip [Configure Trusted Publishing](#3-configure-trusted-publishing) and the npm bootstrap. The reusable workflow still declares `contents: write` and `id-token: write`, so keep both permissions in its caller; GitHub rejects a caller that grants less than a reusable workflow requests. No built-in step requests an OIDC token without a registry. The `release` environment and direct-push branch rules still apply.
+npm Trusted Publishing is not needed, so skip [Configure Trusted Publishing](#5-configure-trusted-publishing) and the npm bootstrap. The reusable workflow still declares `contents: write` and `id-token: write`, so keep both permissions in its caller; GitHub rejects a caller that grants less than a reusable workflow requests. No built-in step requests an OIDC token without a registry. The `release` environment and direct-push branch rules still apply.
 
 The built-in `NpmPackage` project still rejects private packages and builds an npm tarball, which becomes the attached asset. Use [`ZipArchive`](#zip-archives) to attach a zip of a build directory instead.
 
@@ -266,7 +314,7 @@ jobs:
       version: ${{ inputs.version }}
 ```
 
-Install `npm-package-release@0.4.0` as an exact development dependency, set the HTTPS GitHub `repository` URL in `package.json` (or pass `host: new GitHubReleaseHost(run, "owner/repo")`), ignore the build directory in `.gitignore`, and set up the direct-push branch rules from [New Project Setup](#2-configure-github), optionally [restricting the release environment](#restrict-the-release-environment). No npm setup is needed. A release then runs `npm test` and `npm run lint`, sets the version in `package.json`, `package-lock.json`, and `public/manifest.json`, builds, zips, tags, pushes, attaches `example-extension-v1.0.0.zip` to the `v1.0.0` GitHub Release, and prepares `1.0.1` with a new `## 1.0.1 (Next)` section.
+Install `npm-package-release@0.4.0` as an exact development dependency, set the HTTPS GitHub `repository` URL in `package.json` (or pass `host: new GitHubReleaseHost(run, "owner/repo")`), ignore the build directory in `.gitignore`, and set up the direct-push branch rules from [New Project Setup](#4-configure-github), optionally [restricting the release environment](#restrict-the-release-environment). No npm setup is needed. A release then runs `npm test` and `npm run lint`, sets the version in `package.json`, `package-lock.json`, and `public/manifest.json`, builds, zips, tags, pushes, attaches `example-extension-v1.0.0.zip` to the `v1.0.0` GitHub Release, and prepares `1.0.1` with a new `## 1.0.1 (Next)` section.
 
 | Option | Default | Behavior |
 | --- | --- | --- |
@@ -320,7 +368,7 @@ jobs:
       version: ${{ inputs.version }}
 ```
 
-Install `npm-package-release@0.4.0` as an exact development dependency, set the HTTPS GitHub `repository` URL in `package.json` (or pass `host: new GitHubReleaseHost(run, "owner/repo")`), keep the build output in `.gitignore`, and set up the direct-push branch rules from [New Project Setup](#2-configure-github) for your actual default branch, optionally [restricting the release environment](#restrict-the-release-environment). No npm setup is needed. Dispatching the workflow from `main` releases `1.0.0`:
+Install `npm-package-release@0.4.0` as an exact development dependency, set the HTTPS GitHub `repository` URL in `package.json` (or pass `host: new GitHubReleaseHost(run, "owner/repo")`), keep the build output in `.gitignore`, and set up the direct-push branch rules from [New Project Setup](#4-configure-github) for your actual default branch, optionally [restricting the release environment](#restrict-the-release-environment). No npm setup is needed. Dispatching the workflow from `main` releases `1.0.0`:
 
 1. Run `npm test` and `npm run lint`, set the version in `package.json` and `package-lock.json`, date `### 1.0.0 (Next)`, and commit `Prepare release 1.0.0` on `main`.
 2. Run the build, then create the build commit `Build release 1.0.0`: its only parent is the release commit and its tree is the release tree plus every file in `output`, added even though they are ignored. `action.yml` is unchanged.

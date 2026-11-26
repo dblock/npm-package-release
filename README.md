@@ -64,11 +64,11 @@ Merge the caller and locked development dependency into your default branch. Upg
 
 ### 3. Enable Trusted Publishing
 
-Trusted Publishing needs an npm trusted publisher, configured differently for new and existing npm packages; GitHub creates the `release` environment on the first run. No npm publish token or `NODE_AUTH_TOKEN` is needed. Branch rules must also allow the workflow to push release commits and tags; see [setup and branch permissions](docs/usage.md#2-configure-github).
+Trusted Publishing needs an npm trusted publisher, configured differently for new and existing npm packages; GitHub creates the `release` environment on the first run. No npm publish token or `NODE_AUTH_TOKEN` is needed. Branch rules must also allow the workflow to push release commits and tags; see [setup and branch permissions](docs/usage.md#4-configure-github).
 
 #### New npm Package
 
-npm configures Trusted Publishing only for an existing package, so reserve the name with a [`0.0.0` placeholder](docs/usage.md#1-reserve-the-package-name) and configure the publisher in one step when you are ready to release. Preview, log in, and run it:
+npm configures Trusted Publishing only for an existing package, so reserve the name with a [`0.0.0` placeholder](docs/usage.md#3-reserve-the-package-name) and configure the publisher in one step when you are ready to release. Preview, log in, and run it:
 
 ```sh
 npm exec --offline -- npr bootstrap --dry-run
