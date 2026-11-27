@@ -8,6 +8,7 @@
 - [#67](https://github.com/dblock/npm-package-release/pull/67): Make the detailed usage guide self-contained by copying the installation, configuration, and release workflow steps instead of referring to the README - [@dblock](https://github.com/dblock).
 - [#68](https://github.com/dblock/npm-package-release/pull/68): Reject `versionReferences` and `releaseReferences` that select files under `.github/workflows/`, which a workflow's `GITHUB_TOKEN` cannot push, when the workflow is constructed and before references are written - [@dblock](https://github.com/dblock).
 - [#59](https://github.com/dblock/npm-package-release/pull/59): Run every Test environment as runtime-balanced shards with testlanes, merging shard coverage for Coveralls; Test no longer uses local claims - [@dblock](https://github.com/dblock).
+- [#69](https://github.com/dblock/npm-package-release/pull/69): Split the release tests into three files so testlanes can balance them across shards; on Windows they took more than 100 seconds in one file - [@dblock](https://github.com/dblock).
 - Your contribution here.
 
 ## 0.4.0 (2026/11/26)
