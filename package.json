@@ -64,7 +64,7 @@
     "eslint-plugin-markdown-preferences-paragraph": "0.2.0",
     "eslint-plugin-prose-spellcheck": "0.1.2",
     "eslint-plugin-yml": "3.10.0",
-    "testlanes": "0.2.0",
+    "testlanes": "0.3.0",
     "title-case": "4.3.2",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1"

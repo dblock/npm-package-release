@@ -24,7 +24,7 @@ jobs:
           - { id: ubuntu-26, node: '26', os: ubuntu-latest, label: Ubuntu, wrapper: '["c8","--all","--include=dist/**/*.js","--include=bin/**/*.js","--include=scripts/**/*.js","--include=npr.config.js","--exclude=dist/contracts.js","--reporter=text","--reporter=lcov"]', artifacts: coverage/lcov.info }
           - { id: windows-26, node: '26', os: windows-latest, label: Windows, wrapper: '[]', artifacts: '' }
           - { id: macos-26, node: '26', os: macos-latest, label: macOS, wrapper: '[]', artifacts: '' }
-    uses: dblock/testlanes/.github/workflows/testlanes.yml@v0.2.0
+    uses: dblock/testlanes/.github/workflows/testlanes.yml@v0.3.0
     with:
       framework: node
       runs-on: ${{ matrix.entry.os }}
